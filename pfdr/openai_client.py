@@ -1,9 +1,9 @@
-"""DeepSeek integration for relevance scoring."""
+"""OpenAI integration for relevance scoring."""
 
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable
+from typing import Iterable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -12,8 +12,8 @@ from .llm import RankedPaper, keyword_rank
 from .models import Paper
 
 
-class DeepSeekClient:
-    """Client for DeepSeek language model with graceful degradation."""
+class OpenAIClient:
+    """Client for OpenAI-compatible chat completion models."""
 
     def __init__(
         self,
@@ -26,7 +26,7 @@ class DeepSeekClient:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.settings.deepseek_api_key)
+        return bool(self.settings.llm_api_key)
 
     def rank_papers(
         self,
@@ -64,46 +64,43 @@ class DeepSeekClient:
         *,
         top_k: int,
     ) -> list[RankedPaper]:
-        print("Sending request to DeepSeek API...")
+        print("Sending request to OpenAI API...")
         request_payload = self._build_prompt(query, papers, top_k=top_k)
-        endpoint = f"{self.settings.deepseek_api_base.rstrip('/')}/chat/completions"
+        api_base = (self.settings.llm_api_base or "https://api.openai.com/v1").rstrip("/")
+        endpoint = f"{api_base}/chat/completions"
         request = Request(
             endpoint,
             data=json.dumps(request_payload).encode("utf-8"),
             headers={
-                "Authorization": f"Bearer {self.settings.deepseek_api_key}",
+                "Authorization": f"Bearer {self.settings.llm_api_key}",
                 "Content-Type": "application/json",
             },
         )
+
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:  # pragma: no cover - network specific
-            raise RuntimeError(f"DeepSeek HTTP error {exc.code}: {exc.reason}") from exc
+            raise RuntimeError(f"OpenAI HTTP error {exc.code}: {exc.reason}") from exc
         except URLError as exc:  # pragma: no cover - network specific
-            raise RuntimeError(f"DeepSeek network error: {exc.reason}") from exc
-        
-        print("Processing API response...")
+            raise RuntimeError(f"OpenAI network error: {exc.reason}") from exc
 
         message = payload.get("choices", [{}])[0].get("message", {}).get("content", "")
         try:
             structured = json.loads(message)
         except json.JSONDecodeError as exc:
-            raise RuntimeError("DeepSeek returned non-JSON content.") from exc
+            raise RuntimeError("OpenAI returned non-JSON content.") from exc
 
         ranked: list[RankedPaper] = []
-        results = structured.get("results", [])
-        
-        for item in results:
+        for item in structured.get("results", []):
             paper_id = item.get("id")
             score = float(item.get("score", 0.0))
             reason = item.get("reason", "")
-            match = next(
-                (paper for paper in papers if paper.identifier == paper_id), None
-            )
+            match = next((paper for paper in papers if paper.identifier == paper_id), None)
             if match is None:
                 continue
             ranked.append(RankedPaper(paper=match, score=score, reason=reason))
+
         ranked.sort(key=lambda entry: entry.score, reverse=True)
         return ranked[:top_k]
 
@@ -113,7 +110,7 @@ class DeepSeekClient:
         papers: list[Paper],
         *,
         top_k: int,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         documents = [
             {
                 "id": paper.identifier,
@@ -126,19 +123,23 @@ class DeepSeekClient:
             }
             for paper in papers
         ]
+
         system_prompt = (
             "You are a research assistant. You receive a JSON list of papers and "
-            "must rank them by relevance to the user query. Respond strictly in JSON format with the following structure:\n"
+            "must rank them by relevance to the user query. Respond strictly in JSON "
+            "format with the following structure:\n"
             '{"results": [{"id": "paper_id", "score": 0.95, "reason": "explanation"}]}\n'
             "Score should be between 0.0 and 1.0, with higher scores indicating better relevance."
         )
+
         user_prompt = {
             "query": query,
             "top_k": top_k,
             "papers": documents,
         }
+
         return {
-            "model": self.settings.deepseek_model,
+            "model": self.settings.llm_model or "gpt-4o-mini",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_prompt)},
@@ -146,3 +147,7 @@ class DeepSeekClient:
             "response_format": {"type": "json_object"},
             "temperature": 0.2,
         }
+
+
+__all__ = ["OpenAIClient"]
+

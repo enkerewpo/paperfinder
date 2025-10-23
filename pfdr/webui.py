@@ -15,7 +15,7 @@ import uvicorn
 
 from .config import Settings
 from .dblp import DblpIngestionTaskRunner
-from .deepseek import DeepSeekClient
+from .llm import create_llm_client
 from .models import Paper, TaskMeta
 from .state import IngestionStateStore
 from .storage import PaperStore
@@ -89,9 +89,10 @@ class WebUI:
         async def get_config():
             """Get current configuration."""
             return {
-                "deepseek_configured": bool(self.settings.deepseek_api_key),
-                "deepseek_base": self.settings.deepseek_api_base,
-                "deepseek_model": self.settings.deepseek_model,
+                "llm_provider": self.settings.llm_provider,
+                "llm_configured": bool(self.settings.llm_api_key),
+                "llm_api_base": self.settings.llm_api_base,
+                "llm_model": self.settings.llm_model,
                 "data_dir": str(self.settings.data_dir),
                 "targets": [
                     {
@@ -188,7 +189,7 @@ class WebUI:
             if not papers:
                 raise HTTPException(400, "No papers stored. Run fetch first.")
             
-            client = DeepSeekClient(self.settings)
+            client = create_llm_client(self.settings)
             ranked = client.rank_papers(prompt, papers, top_k=top_k)
             
             return {

@@ -31,12 +31,18 @@ class Settings:
         "PFDR_INGEST_STATE_FILE", "ingestion_state.json"
     )
 
-    # DeepSeek API settings
+    # DeepSeek API settings (legacy compatibility)
     deepseek_api_key: Optional[str] = None
     deepseek_api_base: str = os.environ.get(
         "DEEPSEEK_API_BASE", "https://api.deepseek.com"
     )
     deepseek_model: str = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+
+    # Generic LLM settings
+    llm_provider: str = os.environ.get("PFDR_LLM_PROVIDER", "deepseek")
+    llm_api_key: Optional[str] = os.environ.get("PFDR_LLM_API_KEY")
+    llm_api_base: Optional[str] = os.environ.get("PFDR_LLM_API_BASE")
+    llm_model: Optional[str] = os.environ.get("PFDR_LLM_MODEL")
 
     # Ingestion targets
     ingestion_targets: List[IngestionTarget] = field(default_factory=list)
@@ -52,6 +58,7 @@ class Settings:
     def __post_init__(self):
         """Load configuration from YAML file after initialization."""
         self.load_from_yaml()
+        self._normalize_llm_defaults()
 
     def load_from_yaml(self) -> None:
         """Load configuration from YAML file."""
@@ -65,7 +72,15 @@ class Settings:
             if not config:
                 return
 
-            # Load DeepSeek settings
+            # Load LLM settings
+            if "llm" in config:
+                llm_config = config["llm"]
+                self.llm_provider = llm_config.get("provider", self.llm_provider)
+                self.llm_api_key = llm_config.get("api_key", self.llm_api_key)
+                self.llm_api_base = llm_config.get("api_base", self.llm_api_base)
+                self.llm_model = llm_config.get("model", self.llm_model)
+
+            # Load DeepSeek settings (legacy block)
             if "deepseek" in config:
                 deepseek_config = config["deepseek"]
                 self.deepseek_api_key = deepseek_config.get(
@@ -100,6 +115,12 @@ class Settings:
     def save_to_yaml(self) -> None:
         """Save current configuration to YAML file."""
         config = {
+            "llm": {
+                "provider": self.llm_provider,
+                "api_key": self.llm_api_key,
+                "api_base": self.llm_api_base,
+                "model": self.llm_model,
+            },
             "deepseek": {
                 "api_key": self.deepseek_api_key,
                 "api_base": self.deepseek_api_base,
@@ -169,12 +190,50 @@ class Settings:
     def ingestion_state_path(self) -> Path:
         return self.data_dir / self.ingestion_state_filename
 
+    def _normalize_llm_defaults(self) -> None:
+        """Ensure generic LLM settings are populated consistently."""
+
+        provider = (self.llm_provider or "deepseek").strip() or "deepseek"
+        self.llm_provider = provider
+
+        normalized = provider.lower()
+
+        if normalized.startswith("deepseek"):
+            if not self.llm_api_key and self.deepseek_api_key:
+                self.llm_api_key = self.deepseek_api_key
+            if not self.llm_api_base:
+                self.llm_api_base = self.deepseek_api_base
+            if not self.llm_model:
+                self.llm_model = self.deepseek_model
+
+            if not self.deepseek_api_key and self.llm_api_key:
+                self.deepseek_api_key = self.llm_api_key
+            if not self.deepseek_api_base and self.llm_api_base:
+                self.deepseek_api_base = self.llm_api_base
+            if not self.deepseek_model and self.llm_model:
+                self.deepseek_model = self.llm_model
+        elif normalized in {"openai", "oai"}:
+            if not self.llm_api_base:
+                self.llm_api_base = os.environ.get(
+                    "OPENAI_API_BASE", "https://api.openai.com/v1"
+                )
+            if not self.llm_model:
+                self.llm_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            if not self.llm_api_key:
+                self.llm_api_key = os.environ.get("OPENAI_API_KEY")
+
     def create_default_config(self) -> None:
         """Create a default config.yaml file if it doesn't exist."""
         if self.config_file.exists():
             return
 
         default_config = {
+            "llm": {
+                "provider": "deepseek",
+                "api_key": "your-llm-api-key-here",
+                "api_base": "https://api.deepseek.com",
+                "model": "deepseek-chat",
+            },
             "deepseek": {
                 "api_key": "your-deepseek-api-key-here",
                 "api_base": "https://api.deepseek.com",
