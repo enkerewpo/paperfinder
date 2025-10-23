@@ -1,6 +1,0 @@
-# DBLP conference API URLs for testing fetch functionality
-https://dblp.org/search/publ/api?q=stream:conf/sosp:2025
-https://dblp.org/search/publ/api?q=stream:conf/sosp:2024
-https://dblp.org/search/publ/api?q=stream:conf/sosp:2023
-https://dblp.org/search/publ/api?q=stream:conf/osdi:2025
-https://dblp.org/search/publ/api?q=stream:conf/osdi:2024

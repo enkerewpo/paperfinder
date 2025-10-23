@@ -33,6 +33,8 @@ setup(
     },
     install_requires=[
         "requests",
+        "typer[all]>=0.9.0",
+        "pyyaml>=6.0",
     ],
     extras_require={
         "dev": [
