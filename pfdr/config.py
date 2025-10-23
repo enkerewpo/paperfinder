@@ -41,6 +41,11 @@ class Settings:
     # Ingestion targets
     ingestion_targets: List[IngestionTarget] = field(default_factory=list)
 
+    # Web UI settings
+    webui_host: str = os.environ.get("PFDR_WEBUI_HOST", "127.0.0.1")
+    webui_port: int = int(os.environ.get("PFDR_WEBUI_PORT", "8000"))
+    webui_reload: bool = os.environ.get("PFDR_WEBUI_RELOAD", "false").lower() == "true"
+
     # Config file path
     config_file: Path = Path("config.yaml")
 
@@ -82,6 +87,13 @@ class Settings:
                     )
                     self.ingestion_targets.append(target)
 
+            # Load Web UI settings
+            if "webui" in config:
+                webui_config = config["webui"]
+                self.webui_host = webui_config.get("host", self.webui_host)
+                self.webui_port = webui_config.get("port", self.webui_port)
+                self.webui_reload = webui_config.get("reload", self.webui_reload)
+
         except Exception as e:
             print(f"Warning: Failed to load config from {self.config_file}: {e}")
 
@@ -92,6 +104,11 @@ class Settings:
                 "api_key": self.deepseek_api_key,
                 "api_base": self.deepseek_api_base,
                 "model": self.deepseek_model,
+            },
+            "webui": {
+                "host": self.webui_host,
+                "port": self.webui_port,
+                "reload": self.webui_reload,
             },
             "ingestion_targets": [
                 {
@@ -162,6 +179,11 @@ class Settings:
                 "api_key": "your-deepseek-api-key-here",
                 "api_base": "https://api.deepseek.com",
                 "model": "deepseek-chat",
+            },
+            "webui": {
+                "host": "127.0.0.1",
+                "port": 8000,
+                "reload": False,
             },
             "ingestion_targets": [
                 {

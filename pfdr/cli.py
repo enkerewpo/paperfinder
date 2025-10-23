@@ -15,6 +15,7 @@ from .models import Paper
 from .state import IngestionStateStore
 from .storage import PaperStore
 from .tasks import TaskManager
+from .webui import WebUI
 
 app = typer.Typer(
     name="pfdr",
@@ -470,6 +471,33 @@ def sync():
     except Exception as e:
         print(f"Failed to sync configuration: {e}")
         raise typer.Exit(1)
+
+
+@app.command()
+def webui(
+    host: Optional[str] = typer.Option(
+        None, "--host", help="Host to bind the web server to (overrides config)"
+    ),
+    port: Optional[int] = typer.Option(
+        None, "--port", help="Port to bind the web server to (overrides config)"
+    ),
+    reload: Optional[bool] = typer.Option(
+        None, "--reload", help="Enable auto-reload for development (overrides config)"
+    ),
+):
+    """Start the web UI server."""
+    settings = Settings()
+    
+    # Use command line arguments if provided, otherwise use config values
+    final_host = host if host is not None else settings.webui_host
+    final_port = port if port is not None else settings.webui_port
+    final_reload = reload if reload is not None else settings.webui_reload
+    
+    print(f"Starting pfdr Web UI on http://{final_host}:{final_port}")
+    print("Press Ctrl+C to stop the server")
+    
+    webui = WebUI(settings)
+    webui.run(host=final_host, port=final_port, reload=final_reload)
 
 
 @app.command()

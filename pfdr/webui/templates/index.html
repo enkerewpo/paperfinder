@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PFDR Console</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="brand">
+            <span class="brand-title">PFDR Console</span>
+            <span class="brand-subtitle">DBLP ingestion &amp; paper discovery</span>
+        </div>
+        <div class="header-actions">
+            <button id="refreshButton" type="button" class="ghost-button">Refresh</button>
+        </div>
+    </header>
+
+    <main class="layout">
+        <section class="panel search-panel">
+            <div class="search-bar">
+                <input id="searchInput" type="search" placeholder="Fuzzy search papers, authors, venues, DOIs…" autocomplete="off">
+                <div class="search-controls">
+                    <label>
+                        Mode
+                        <select id="searchScope">
+                            <option value="all" selected>Anywhere</option>
+                            <option value="title">Title</option>
+                            <option value="authors">Authors</option>
+                            <option value="venue">Venue</option>
+                            <option value="abstract">Abstract</option>
+                        </select>
+                    </label>
+                    <label>
+                        Sort
+                        <select id="sortMode">
+                            <option value="relevance" selected>By relevance</option>
+                            <option value="year_desc">Year ⬇︎</option>
+                            <option value="year_asc">Year ⬆︎</option>
+                            <option value="title">Title A→Z</option>
+                        </select>
+                    </label>
+                    <label class="toggle">
+                        <input id="strictToggle" type="checkbox">
+                        <span>Strict match</span>
+                    </label>
+                </div>
+            </div>
+            <div class="summary">
+                <div class="summary-item">
+                    <div class="summary-value" id="paperCount">0</div>
+                    <div class="summary-label">Papers loaded</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="authorCount">0</div>
+                    <div class="summary-label">Authors indexed</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="taskCount">0</div>
+                    <div class="summary-label">Active tasks</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="sourceCount">0</div>
+                    <div class="summary-label">Sources tracked</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel main-panel">
+            <header class="panel-header">
+                <h2>Papers</h2>
+                <span id="resultMeta" class="result-meta">Showing 0 of 0</span>
+            </header>
+            <div id="papersContainer" class="paper-list" role="list"></div>
+        </section>
+
+        <aside class="panel sidebar">
+            <section class="card">
+                <h3>Command Center</h3>
+                <p class="card-hint">Trigger familiar CLI workflows directly from the browser.</p>
+
+                <form id="fetchForm" class="form-section">
+                    <h4>`pfdr fetch`</h4>
+                    <label>
+                        Source URL
+                        <input type="url" name="source_url" placeholder="https://dblp.org/search?...">
+                    </label>
+                    <label>
+                        Target name
+                        <input type="text" name="target_name" placeholder="target-id">
+                    </label>
+                    <label class="inline">
+                        <input type="checkbox" name="all_targets">
+                        <span>All enabled targets</span>
+                    </label>
+                    <label>
+                        Page size
+                        <input type="number" name="page_size" min="50" max="500" value="200">
+                    </label>
+                    <label>
+                        Max entries
+                        <input type="number" name="max_entries" min="1" placeholder="Optional">
+                    </label>
+                    <button type="submit">Start fetch</button>
+                    <output></output>
+                </form>
+
+                <form id="queryForm" class="form-section">
+                    <h4>`pfdr query`</h4>
+                    <label>
+                        Prompt
+                        <textarea name="prompt" rows="3" placeholder="Ask DeepSeek to rank papers…"></textarea>
+                    </label>
+                    <label>
+                        Top K
+                        <input type="number" name="top_k" min="1" max="50" value="10">
+                    </label>
+                    <button type="submit">Run query</button>
+                    <output></output>
+                </form>
+
+                <form id="deleteForm" class="form-section">
+                    <h4>`pfdr remove`</h4>
+                    <label>
+                        Pattern
+                        <input type="text" name="pattern" placeholder="Substring to match source URL">
+                    </label>
+                    <label>
+                        Source URL
+                        <input type="url" name="source_url" placeholder="Exact source URL">
+                    </label>
+                    <label>
+                        Target name
+                        <input type="text" name="target_name" placeholder="Configured target name">
+                    </label>
+                    <button type="submit" class="danger">Remove</button>
+                    <output></output>
+                </form>
+            </section>
+
+            <section class="card" id="tasksCard">
+                <h3>Recent Tasks</h3>
+                <div class="tasks-list" id="tasksContainer"></div>
+            </section>
+
+            <section class="card" id="sourcesCard">
+                <h3>Sources</h3>
+                <div class="sources-list" id="sourcesContainer"></div>
+            </section>
+        </aside>
+    </main>
+
+    <template id="paperRowTemplate">
+        <article class="paper-row" role="listitem">
+            <div class="paper-meta">
+                <a class="paper-title" target="_blank" rel="noopener"></a>
+                <div class="paper-authors"></div>
+                <div class="paper-tags"></div>
+            </div>
+            <button type="button" class="icon-button" title="Copy citation">⧉</button>
+        </article>
+    </template>
+
+    <template id="taskTemplate">
+        <div class="task-row">
+            <div>
+                <strong class="task-type"></strong>
+                <span class="task-status"></span>
+            </div>
+            <small class="task-updated"></small>
+        </div>
+    </template>
+
+    <template id="sourceTemplate">
+        <div class="source-row">
+            <span class="source-name"></span>
+            <small class="source-url"></small>
+        </div>
+    </template>
+
+    <script src="/static/app.js" defer></script>
+</body>
+</html>
