@@ -73,18 +73,17 @@ class PaperStore:
         with self._lock:
             papers = self.list()
             original_count = len(papers)
-            
+
             # Filter out papers from deleted sources
             filtered_papers = [
-                paper for paper in papers 
-                if paper.source not in source_urls
+                paper for paper in papers if paper.source not in source_urls
             ]
-            
+
             deleted_count = original_count - len(filtered_papers)
-            
+
             if deleted_count > 0:
                 self.save_all(filtered_papers)
-            
+
             return deleted_count
 
 

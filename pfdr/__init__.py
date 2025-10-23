@@ -1,5 +1,9 @@
-from .config import Settings  # noqa: F401
-from .models import Paper, TaskMeta, TaskStatus  # noqa: F401
-from .state import IngestionStateStore, SourceIngestionState  # noqa: F401
-from .storage import PaperStore, TaskStore  # noqa: F401
-from .tasks import TaskManager  # noqa: F401
+"""pfdr - DBLP ingestion and DeepSeek-powered querying for academic papers."""
+
+__version__ = "0.1.1"
+
+from .config import Settings
+from .models import Paper, TaskMeta, TaskStatus
+from .state import IngestionStateStore, SourceIngestionState
+from .storage import PaperStore, TaskStore
+from .tasks import TaskManager

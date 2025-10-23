@@ -73,6 +73,7 @@ class DeepSeekClient:
         *,
         top_k: int,
     ) -> list[RankedPaper]:
+        print("Performing keyword-based ranking...")
         query_tokens = set(_tokenize(query))
         ranked: list[RankedPaper] = []
         for paper in papers:
@@ -93,9 +94,7 @@ class DeepSeekClient:
             else:
                 overlap = len(tokens.intersection(query_tokens))
                 score = overlap / math.sqrt(len(tokens) or 1)
-            reason = (
-                f"Keyword overlap: {len(tokens.intersection(query_tokens))} shared terms."
-            )
+            reason = f"Keyword overlap: {len(tokens.intersection(query_tokens))} shared terms."
             ranked.append(RankedPaper(paper=paper, score=score, reason=reason))
         ranked.sort(key=lambda item: item.score, reverse=True)
         return ranked[:top_k]
@@ -107,6 +106,7 @@ class DeepSeekClient:
         *,
         top_k: int,
     ) -> list[RankedPaper]:
+        print("Sending request to DeepSeek API...")
         request_payload = self._build_prompt(query, papers, top_k=top_k)
         endpoint = f"{self.settings.deepseek_api_base.rstrip('/')}/chat/completions"
         request = Request(
@@ -124,23 +124,25 @@ class DeepSeekClient:
             raise RuntimeError(f"DeepSeek HTTP error {exc.code}: {exc.reason}") from exc
         except URLError as exc:  # pragma: no cover - network specific
             raise RuntimeError(f"DeepSeek network error: {exc.reason}") from exc
+        
+        print("Processing API response...")
 
-        message = (
-            payload.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
+        message = payload.get("choices", [{}])[0].get("message", {}).get("content", "")
         try:
             structured = json.loads(message)
         except json.JSONDecodeError as exc:
             raise RuntimeError("DeepSeek returned non-JSON content.") from exc
 
         ranked: list[RankedPaper] = []
-        for item in structured.get("results", []):
+        results = structured.get("results", [])
+        
+        for item in results:
             paper_id = item.get("id")
             score = float(item.get("score", 0.0))
             reason = item.get("reason", "")
-            match = next((paper for paper in papers if paper.identifier == paper_id), None)
+            match = next(
+                (paper for paper in papers if paper.identifier == paper_id), None
+            )
             if match is None:
                 continue
             ranked.append(RankedPaper(paper=match, score=score, reason=reason))
@@ -168,7 +170,9 @@ class DeepSeekClient:
         ]
         system_prompt = (
             "You are a research assistant. You receive a JSON list of papers and "
-            "must rank them by relevance to the user query. Respond strictly in JSON."
+            "must rank them by relevance to the user query. Respond strictly in JSON format with the following structure:\n"
+            '{"results": [{"id": "paper_id", "score": 0.95, "reason": "explanation"}]}\n'
+            "Score should be between 0.0 and 1.0, with higher scores indicating better relevance."
         )
         user_prompt = {
             "query": query,
@@ -184,4 +188,3 @@ class DeepSeekClient:
             "response_format": {"type": "json_object"},
             "temperature": 0.2,
         }
-

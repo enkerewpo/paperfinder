@@ -1,4 +1,5 @@
 # pack python package and upload to pypi
+rm -rf dist/*
 python -m build
 ls -la dist/
 python -m twine check dist/*

@@ -11,5 +11,5 @@ stored entries against natural language queries with DeepSeek.
 pip install pfdr
 pfdr config --init
 pfdr fetch --all-targets
-pfdr query --prompt "embodied intelligence" --top-k 5
+pfdr query --top-k 5 "embodied intelligence"
 ```

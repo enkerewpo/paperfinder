@@ -91,7 +91,9 @@ class DblpClient:
             identifier=info.get("key") or info.get("url") or "",
             title=info.get("title", "").strip(),
             authors=[author for author in authors if author],
-            year=int(info["year"]) if "year" in info and str(info["year"]).isdigit() else None,
+            year=int(info["year"])
+            if "year" in info and str(info["year"]).isdigit()
+            else None,
             doi=doi,
             url=info.get("ee") or info.get("url"),
             abstract=info.get("abstract"),
@@ -133,15 +135,17 @@ class DblpIngestionTaskRunner:
         overall_collected = int(checkpoint.get("overall_collected", 0))
 
         known_ids = self.store.identifiers_by_source()
-        state_index = {
-            state.source_url: state for state in self.state_store.list()
-        }
+        state_index = {state.source_url: state for state in self.state_store.list()}
 
         with manager.run_task(
             task,
-            total=self._compute_total_hint(checkpoint_sources, max_entries, len(sources)),
+            total=self._compute_total_hint(
+                checkpoint_sources, max_entries, len(sources)
+            ),
         ) as progress_update:
-            for source_url in sources:
+            print(f"Processing {len(sources)} sources...")
+            for source_idx, source_url in enumerate(sources, 1):
+                print(f"Source {source_idx}/{len(sources)}: {source_url}")
                 state = state_index.get(source_url)
                 source_checkpoint = checkpoint_sources.get(source_url, {})
 
@@ -159,10 +163,16 @@ class DblpIngestionTaskRunner:
 
                 source_known = known_ids.setdefault(source_url, set())
 
+                batch_count = 0
                 while True:
                     if max_entries is not None and collected >= max_entries:
                         break
                     batch_size = self._compute_batch_size(max_entries, collected)
+                    batch_count += 1
+
+                    print(
+                        f"  Fetching batch {batch_count} (offset: {offset}, size: {batch_size})..."
+                    )
                     batch = self.client.fetch_batch(
                         source_url, offset=offset, page_size=batch_size
                     )
@@ -184,6 +194,11 @@ class DblpIngestionTaskRunner:
                         source_known.update(paper.identifier for paper in new_papers)
                         collected += len(new_papers)
                         overall_collected += len(new_papers)
+                        print(
+                            f"  Added {len(new_papers)} new papers (total for this source: {collected})"
+                        )
+                    else:
+                        print(f"  No new papers in this batch")
 
                     offset += len(batch.items)
                     total_available = batch.total
@@ -222,6 +237,11 @@ class DblpIngestionTaskRunner:
                         total_collected=collected,
                         total_available=total_available,
                     )
+                )
+
+                # Show source completion summary
+                print(
+                    f"  Source completed: {collected} papers collected, offset: {offset}"
                 )
 
     def _compute_batch_size(self, max_entries: int | None, collected: int) -> int:

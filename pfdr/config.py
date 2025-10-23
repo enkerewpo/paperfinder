@@ -13,6 +13,7 @@ import yaml
 @dataclass(slots=True)
 class IngestionTarget:
     """Represents a configured ingestion target."""
+
     name: str
     url: str
     enabled: bool = True
@@ -53,27 +54,31 @@ class Settings:
             return
 
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-            
+
             if not config:
                 return
 
             # Load DeepSeek settings
-            if 'deepseek' in config:
-                deepseek_config = config['deepseek']
-                self.deepseek_api_key = deepseek_config.get('api_key') or os.environ.get("DEEPSEEK_API_KEY")
-                self.deepseek_api_base = deepseek_config.get('api_base', self.deepseek_api_base)
-                self.deepseek_model = deepseek_config.get('model', self.deepseek_model)
+            if "deepseek" in config:
+                deepseek_config = config["deepseek"]
+                self.deepseek_api_key = deepseek_config.get(
+                    "api_key"
+                ) or os.environ.get("DEEPSEEK_API_KEY")
+                self.deepseek_api_base = deepseek_config.get(
+                    "api_base", self.deepseek_api_base
+                )
+                self.deepseek_model = deepseek_config.get("model", self.deepseek_model)
 
             # Load ingestion targets
-            if 'ingestion_targets' in config:
+            if "ingestion_targets" in config:
                 self.ingestion_targets = []
-                for target_data in config['ingestion_targets']:
+                for target_data in config["ingestion_targets"]:
                     target = IngestionTarget(
-                        name=target_data['name'],
-                        url=target_data['url'],
-                        enabled=target_data.get('enabled', True)
+                        name=target_data["name"],
+                        url=target_data["url"],
+                        enabled=target_data.get("enabled", True),
                     )
                     self.ingestion_targets.append(target)
 
@@ -83,24 +88,26 @@ class Settings:
     def save_to_yaml(self) -> None:
         """Save current configuration to YAML file."""
         config = {
-            'deepseek': {
-                'api_key': self.deepseek_api_key,
-                'api_base': self.deepseek_api_base,
-                'model': self.deepseek_model,
+            "deepseek": {
+                "api_key": self.deepseek_api_key,
+                "api_base": self.deepseek_api_base,
+                "model": self.deepseek_model,
             },
-            'ingestion_targets': [
+            "ingestion_targets": [
                 {
-                    'name': target.name,
-                    'url': target.url,
-                    'enabled': target.enabled,
+                    "name": target.name,
+                    "url": target.url,
+                    "enabled": target.enabled,
                 }
                 for target in self.ingestion_targets
-            ]
+            ],
         }
 
         try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    config, f, default_flow_style=False, allow_unicode=True, indent=2
+                )
         except Exception as e:
             raise RuntimeError(f"Failed to save config to {self.config_file}: {e}")
 
@@ -112,7 +119,7 @@ class Settings:
                 target.url = url
                 target.enabled = True
                 return
-        
+
         # Add new target
         target = IngestionTarget(name=name, url=url)
         self.ingestion_targets.append(target)
@@ -151,27 +158,35 @@ class Settings:
             return
 
         default_config = {
-            'deepseek': {
-                'api_key': 'your-deepseek-api-key-here',
-                'api_base': 'https://api.deepseek.com',
-                'model': 'deepseek-chat',
+            "deepseek": {
+                "api_key": "your-deepseek-api-key-here",
+                "api_base": "https://api.deepseek.com",
+                "model": "deepseek-chat",
             },
-            'ingestion_targets': [
+            "ingestion_targets": [
                 {
-                    'name': 'neurips-2023',
-                    'url': 'https://dblp.org/search/publ/api?q=stream:conf/nips:2023',
-                    'enabled': True,
+                    "name": "neurips-2023",
+                    "url": "https://dblp.org/search/publ/api?q=stream:conf/nips:2023",
+                    "enabled": True,
                 },
                 {
-                    'name': 'icml-2023',
-                    'url': 'https://dblp.org/search/publ/api?q=stream:conf/icml:2023',
-                    'enabled': True,
+                    "name": "icml-2023",
+                    "url": "https://dblp.org/search/publ/api?q=stream:conf/icml:2023",
+                    "enabled": True,
                 },
-            ]
+            ],
         }
 
         try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                yaml.dump(default_config, f, default_flow_style=False, allow_unicode=True, indent=2)
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    default_config,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    indent=2,
+                )
         except Exception as e:
-            raise RuntimeError(f"Failed to create default config at {self.config_file}: {e}")
+            raise RuntimeError(
+                f"Failed to create default config at {self.config_file}: {e}"
+            )

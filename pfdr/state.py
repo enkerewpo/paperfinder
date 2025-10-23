@@ -37,8 +37,7 @@ class SourceIngestionState:
             offset=int(payload.get("offset", 0)),
             total_collected=int(payload.get("total_collected", 0)),
             total_available=payload.get("total_available"),
-            updated_at=payload.get("updated_at")
-            or datetime.utcnow().isoformat(),
+            updated_at=payload.get("updated_at") or datetime.utcnow().isoformat(),
         )
 
 
@@ -93,16 +92,16 @@ class IngestionStateStore:
         with self._lock:
             states = self._load()
             deleted_sources = []
-            
+
             # Find matching sources
             for source_url in list(states.keys()):
                 if pattern.lower() in source_url.lower():
                     deleted_sources.append(source_url)
                     del states[source_url]
-            
+
             if deleted_sources:
                 self._persist(states)
-            
+
             return deleted_sources
 
     def delete_by_source(self, source_url: str) -> bool:
