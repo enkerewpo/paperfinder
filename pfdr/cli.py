@@ -1,5 +1,3 @@
-"""Command-line interface for paperfinder."""
-
 from __future__ import annotations
 
 import json
@@ -22,7 +20,7 @@ from .storage import PaperStore
 from .tasks import TaskManager
 
 app = typer.Typer(
-    name="paperfinder",
+    name="pfdr",
     help="A powerful tool for fetching academic papers from DBLP and querying them using AI-powered semantic search.",
     no_args_is_help=True,
     rich_markup_mode="rich"
@@ -438,7 +436,6 @@ def list(
     pattern: Optional[str] = typer.Option(None, "--pattern", help="Filter by pattern (case-insensitive)"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
-    """List various data stored by paperfinder."""
     if not sources and not papers and not authors:
         console.print("[red]Error:[/red] Must specify one of --sources, --papers, or --authors")
         raise typer.Exit(1)

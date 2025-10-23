@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pfdr"
+version = "0.1.0"
+description = "DBLP ingestion and DeepSeek-powered querying for academic papers"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "wheatfox", email = "wheatfox17@icloud.com"}
+]
+maintainers = [
+    {name = "wheatfox", email = "wheatfox17@icloud.com"}
+]
+keywords = ["dblp", "academic", "papers", "deepseek", "ai", "research"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "requests",
+    "typer[all]>=0.9.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+]
+
+[project.urls]
+Homepage = "https://github.com/enkerewpo/pfdr"
+Repository = "https://github.com/enkerewpo/pfdr"
+Issues = "https://github.com/enkerewpo/pfdr/issues"
+Documentation = "https://github.com/enkerewpo/pfdr#readme"
+
+[project.scripts]
+pfdr = "pfdr.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pfdr"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/pfdr",
+    "/README.md",
+    "/LICENSE",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

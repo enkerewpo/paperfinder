@@ -15,7 +15,7 @@ from .state import IngestionStateStore, SourceIngestionState
 from .storage import PaperStore
 from .tasks import TaskManager
 
-USER_AGENT = "paperfinder/0.1 (https://github.com/)"
+USER_AGENT = "pfdr/0.1 (https://github.com/)"
 
 
 @dataclass(slots=True)

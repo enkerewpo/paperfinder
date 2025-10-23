@@ -1,4 +1,4 @@
-# paperfinder
+# pfdr
 
 wheatfox
 
@@ -8,8 +8,8 @@ stored entries against natural language queries with DeepSeek.
 ## Quickstart
 
 ```bash
-pip install paperfinder
-paperfinder config --init
-paperfinder fetch --all-targets
-paperfinder query --prompt "embodied intelligence" --top-k 5
+pip install pfdr
+pfdr config --init
+pfdr fetch --all-targets
+pfdr query --prompt "embodied intelligence" --top-k 5
 ```

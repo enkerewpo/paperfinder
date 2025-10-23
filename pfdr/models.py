@@ -1,4 +1,4 @@
-"""Domain models used by Paperfinder."""
+"""Domain models used by pfdr."""
 
 from __future__ import annotations
 

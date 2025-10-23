@@ -1,4 +1,4 @@
-"""Configuration helpers for the paperfinder project."""
+"""Configuration helpers for the pfdr project."""
 
 from __future__ import annotations
 
@@ -23,11 +23,11 @@ class Settings:
     """Runtime settings loaded from YAML config file and environment variables."""
 
     # Data storage paths
-    data_dir: Path = Path(os.environ.get("PAPERFINDER_DATA_DIR", "data"))
-    papers_filename: str = os.environ.get("PAPERFINDER_PAPERS_FILE", "papers.json")
-    tasks_filename: str = os.environ.get("PAPERFINDER_TASKS_FILE", "tasks.json")
+    data_dir: Path = Path(os.environ.get("PFDR_DATA_DIR", "data"))
+    papers_filename: str = os.environ.get("PFDR_PAPERS_FILE", "papers.json")
+    tasks_filename: str = os.environ.get("PFDR_TASKS_FILE", "tasks.json")
     ingestion_state_filename: str = os.environ.get(
-        "PAPERFINDER_INGEST_STATE_FILE", "ingestion_state.json"
+        "PFDR_INGEST_STATE_FILE", "ingestion_state.json"
     )
 
     # DeepSeek API settings
