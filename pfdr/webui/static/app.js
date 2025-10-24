@@ -13,7 +13,6 @@ class PFDRDashboard {
     }
 
     async init() {
-        this.initTheme();
         this.cacheRefs();
         this.bindEvents();
         await this.refreshAll();
@@ -30,7 +29,6 @@ class PFDRDashboard {
         this.refs.papersContainer = document.getElementById("papersContainer");
         this.refs.tasksContainer = document.getElementById("tasksContainer");
         this.refs.refreshButton = document.getElementById("refreshButton");
-        this.refs.themeToggle = document.getElementById("themeToggle");
 
         this.refs.paperTemplate = document.getElementById("paperRowTemplate");
         this.refs.taskTemplate = document.getElementById("taskTemplate");
@@ -47,10 +45,6 @@ class PFDRDashboard {
         
         if (this.refs.refreshButton) {
             this.refs.refreshButton.addEventListener("click", () => this.refreshAll());
-        }
-        
-        if (this.refs.themeToggle) {
-            this.refs.themeToggle.addEventListener("click", () => this.toggleTheme());
         }
 
         this.refs.fetchForm.addEventListener("submit", async (event) => {
@@ -353,20 +347,11 @@ class PFDRDashboard {
         const data = new FormData(form);
 
         if (id === "fetchForm") {
-            const sourceUrl = data.get("source_url")?.toString().trim();
-            const targetName = data.get("target_name")?.toString().trim();
-            const allTargets = data.get("all_targets");
-            const choices = [sourceUrl, targetName, allTargets === "on"].filter((value) => {
-                if (typeof value === "boolean") {
-                    return value;
-                }
-                return Boolean(value);
-            });
-            if (!choices.length) {
-                return { ok: false, message: "Choose one source option." };
-            }
-            if (choices.length > 1) {
-                return { ok: false, message: "Choose only one source option." };
+            const url = data.get("url")?.toString().trim();
+            const name = data.get("name")?.toString().trim();
+            
+            if (!url || !name) {
+                return { ok: false, message: "Please fill in both URL and Name fields." };
             }
         }
 
@@ -434,34 +419,6 @@ class PFDRDashboard {
         return summary.slice(0, 220);
     }
 
-    toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        
-        let newTheme;
-        if (currentTheme === 'dark') {
-            newTheme = 'light';
-        } else if (currentTheme === 'light') {
-            newTheme = 'dark';
-        } else {
-            // Handle 'auto' or any other value
-            newTheme = 'dark';
-        }
-        
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('pfdr-theme', newTheme);
-        
-        // Force a style recalculation
-        document.body.style.display = 'none';
-        document.body.offsetHeight; // Trigger reflow
-        document.body.style.display = '';
-    }
-
-    initTheme() {
-        const savedTheme = localStorage.getItem('pfdr-theme');
-        if (savedTheme) {
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        }
-    }
 
     async refreshAll() {
         await Promise.all([
@@ -474,6 +431,7 @@ class PFDRDashboard {
 
     async loadPapers() {
         try {
+            console.log("Loading papers...");
             const response = await fetch("/api/papers?limit=2000");
             if (!response.ok) {
                 throw new Error(`Failed to load papers (${response.status})`);
@@ -481,8 +439,9 @@ class PFDRDashboard {
             const payload = await response.json();
             this.papers = payload.papers || [];
             this.authors = this.collectAuthors(this.papers);
+            console.log(`Loaded ${this.papers.length} papers`);
         } catch (error) {
-            console.error(error);
+            console.error("Error loading papers:", error);
             this.papers = [];
         }
     }
@@ -507,7 +466,12 @@ class PFDRDashboard {
         this.state.sort = this.refs.sortMode.value;
         this.state.strict = this.refs.strictToggle.checked;
 
+        console.log("Search state:", this.state);
+        console.log("Total papers:", this.papers.length);
+        
         this.filtered = this.filterAndScorePapers();
+        console.log("Filtered papers:", this.filtered.length);
+        
         this.renderPapers();
         this.updateMeta();
     }
@@ -691,7 +655,12 @@ class PFDRDashboard {
     }
 
     renderPapers() {
+        console.log("Rendering papers...", this.filtered.length);
         const container = this.refs.papersContainer;
+        if (!container) {
+            console.error("papersContainer not found!");
+            return;
+        }
         container.innerHTML = "";
 
         if (!this.filtered.length) {
@@ -745,20 +714,22 @@ class PFDRDashboard {
                 scoreEl.style.display = "none";
             }
 
-            copy.addEventListener("click", () => {
-                const citation = this.buildCitation(paper);
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(citation)
-                        .then(() => this.markCopyButton(copy, "✓"))
-                        .catch(() => {
-                            this.fallbackCopy(citation);
-                            this.markCopyButton(copy, "✓");
-                        });
-                } else {
-                    this.fallbackCopy(citation);
-                    this.markCopyButton(copy, "✓");
-                }
-            });
+            if (copy) {
+                copy.addEventListener("click", () => {
+                    const citation = this.buildCitation(paper);
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(citation)
+                            .then(() => this.markCopyButton(copy, "✓"))
+                            .catch(() => {
+                                this.fallbackCopy(citation);
+                                this.markCopyButton(copy, "✓");
+                            });
+                    } else {
+                        this.fallbackCopy(citation);
+                        this.markCopyButton(copy, "✓");
+                    }
+                });
+            }
 
             fragment.appendChild(node);
         }
@@ -813,9 +784,19 @@ class PFDRDashboard {
 
         tasks.slice(0, 5).forEach((task) => {
             const node = this.refs.taskTemplate.content.cloneNode(true);
-            node.querySelector(".status-type").textContent = task.task_type || "task";
-            node.querySelector(".status-badge").textContent = task.status || "";
-            node.querySelector(".status-time").textContent = this.timeAgo(task.updated_at);
+            const title = node.querySelector(".task-title");
+            const description = node.querySelector(".task-description");
+            const meta = node.querySelector(".task-meta");
+            const status = node.querySelector(".task-status");
+            
+            if (title) title.textContent = task.task_type || "task";
+            if (description) description.textContent = task.description || "";
+            if (meta) meta.textContent = this.timeAgo(task.updated_at);
+            if (status) {
+                status.textContent = task.status || "";
+                status.className = `badge task-status badge-${task.status || 'secondary'}`;
+            }
+            
             fragment.appendChild(node);
         });
 
