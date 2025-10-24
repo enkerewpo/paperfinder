@@ -26,7 +26,7 @@ class DeepSeekClient:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.settings.deepseek_api_key)
+        return bool(self.settings.llm_api_key)
 
     def rank_papers(
         self,
@@ -66,12 +66,12 @@ class DeepSeekClient:
     ) -> list[RankedPaper]:
         print("Sending request to DeepSeek API...")
         request_payload = self._build_prompt(query, papers, top_k=top_k)
-        endpoint = f"{self.settings.deepseek_api_base.rstrip('/')}/chat/completions"
+        endpoint = f"{self.settings.llm_api_base.rstrip('/')}/chat/completions"
         request = Request(
             endpoint,
             data=json.dumps(request_payload).encode("utf-8"),
             headers={
-                "Authorization": f"Bearer {self.settings.deepseek_api_key}",
+                "Authorization": f"Bearer {self.settings.llm_api_key}",
                 "Content-Type": "application/json",
             },
         )
@@ -138,7 +138,7 @@ class DeepSeekClient:
             "papers": documents,
         }
         return {
-            "model": self.settings.deepseek_model,
+            "model": self.settings.llm_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_prompt)},

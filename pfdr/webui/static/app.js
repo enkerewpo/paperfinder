@@ -13,6 +13,7 @@ class PFDRDashboard {
     }
 
     async init() {
+        this.initTheme();
         this.cacheRefs();
         this.bindEvents();
         await this.refreshAll();
@@ -26,20 +27,16 @@ class PFDRDashboard {
         this.refs.resultMeta = document.getElementById("resultMeta");
         this.refs.paperCount = document.getElementById("paperCount");
         this.refs.authorCount = document.getElementById("authorCount");
-        this.refs.taskCount = document.getElementById("taskCount");
-        this.refs.sourceCount = document.getElementById("sourceCount");
         this.refs.papersContainer = document.getElementById("papersContainer");
         this.refs.tasksContainer = document.getElementById("tasksContainer");
-        this.refs.sourcesContainer = document.getElementById("sourcesContainer");
         this.refs.refreshButton = document.getElementById("refreshButton");
+        this.refs.themeToggle = document.getElementById("themeToggle");
 
         this.refs.paperTemplate = document.getElementById("paperRowTemplate");
         this.refs.taskTemplate = document.getElementById("taskTemplate");
-        this.refs.sourceTemplate = document.getElementById("sourceTemplate");
 
         this.refs.fetchForm = document.getElementById("fetchForm");
         this.refs.queryForm = document.getElementById("queryForm");
-        this.refs.deleteForm = document.getElementById("deleteForm");
     }
 
     bindEvents() {
@@ -47,7 +44,14 @@ class PFDRDashboard {
         this.refs.searchScope.addEventListener("change", () => this.onSearch());
         this.refs.sortMode.addEventListener("change", () => this.onSearch());
         this.refs.strictToggle.addEventListener("change", () => this.onSearch());
-        this.refs.refreshButton.addEventListener("click", () => this.refreshAll());
+        
+        if (this.refs.refreshButton) {
+            this.refs.refreshButton.addEventListener("click", () => this.refreshAll());
+        }
+        
+        if (this.refs.themeToggle) {
+            this.refs.themeToggle.addEventListener("click", () => this.toggleTheme());
+        }
 
         this.refs.fetchForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -56,26 +60,232 @@ class PFDRDashboard {
 
         this.refs.queryForm.addEventListener("submit", async (event) => {
             event.preventDefault();
-            await this.submitCommandForm(event.currentTarget, "/api/query", "POST", (result, form) => {
-                const output = form.querySelector("output");
-                if (!result || !result.results?.length) {
-                    output.value = "No matches returned.";
-                    return;
+            await this.submitQueryForm(event.currentTarget);
+        });
+    }
+
+    async submitQueryForm(form) {
+        const submitButton = form.querySelector("button[type='submit']");
+        const output = form.querySelector("output");
+        const promptTextarea = form.querySelector("textarea[name='prompt']");
+        
+        if (output) {
+            output.value = "Preparing query...";
+        }
+
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = "Querying...";
+        }
+
+        // Start timer
+        const startTime = Date.now();
+        const timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            if (output) {
+                output.value = `Querying AI... ${elapsed}s elapsed`;
+            }
+        }, 1000);
+
+        try {
+            const validation = this.validateForm(form);
+            if (!validation.ok) {
+                if (output) {
+                    output.value = validation.message;
                 }
+                return;
+            }
 
-                const top = result.results.slice(0, 3).map((item) => {
-                    const paper = item.paper || {};
-                    const title = paper.title || "Untitled";
-                    return `${title} (${item.score.toFixed(2)})`;
-                });
-                output.value = `Top ${result.results.length}: ${top.join(" • ")}`;
+            const payload = this.buildPayload(form);
+            if (!payload) {
+                if (output) {
+                    output.value = "Fill in the prompt before submitting.";
+                }
+                return;
+            }
+
+            const response = await fetch("/api/query", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: payload
             });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Request failed (${response.status})`);
+            }
+
+            const result = await response.json();
+            this.displayQueryResults(result, output, promptTextarea);
+
+        } catch (error) {
+            if (output) {
+                output.value = error.message || "Query failed.";
+            }
+        } finally {
+            clearInterval(timerInterval);
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = "Run query";
+            }
+        }
+    }
+
+    displayQueryResults(result, output, promptTextarea) {
+        if (!result || !result.results?.length) {
+            output.value = "No matches returned.";
+            return;
+        }
+
+        // Clear the main paper list and show query results
+        this.showQueryResults(result.results, promptTextarea.value);
+        
+        // Update output with summary
+        const top3 = result.results.slice(0, 3).map((item) => {
+            const paper = item.paper || {};
+            const title = paper.title || "Untitled";
+            return `${title} (${item.score.toFixed(2)})`;
+        });
+        output.value = `Found ${result.results.length} results. Top 3: ${top3.join(" • ")}`;
+    }
+
+    showQueryResults(results, query) {
+        const container = this.refs.papersContainer;
+        container.innerHTML = "";
+
+        // Add query header
+        const header = document.createElement("div");
+        header.className = "query-results-header";
+        header.innerHTML = `
+            <h3>AI Query Results</h3>
+            <p class="query-text">"${query}"</p>
+            <p class="result-count">${results.length} papers found</p>
+        `;
+        container.appendChild(header);
+
+        // Render results
+        const fragment = document.createDocumentFragment();
+        results.forEach((item, index) => {
+            const paper = item.paper;
+            const node = this.refs.paperTemplate.content.cloneNode(true);
+            const article = node.querySelector(".paper-row");
+            const title = node.querySelector(".paper-title");
+            const authors = node.querySelector(".paper-authors");
+            const year = node.querySelector(".paper-year");
+            const venue = node.querySelector(".paper-venue");
+            const scoreEl = node.querySelector(".paper-score");
+            const copy = node.querySelector(".action-btn");
+
+            // Add ranking number
+            article.classList.add("query-result");
+            article.setAttribute("data-rank", index + 1);
+
+            title.textContent = paper.title || "Untitled paper";
+            if (paper.url) {
+                title.href = paper.url;
+            } else if (paper.doi) {
+                title.href = `https://doi.org/${paper.doi}`;
+            } else {
+                title.href = "#";
+            }
+
+            const authorList = Array.isArray(paper.authors) ? paper.authors.join(", ") : "";
+            authors.textContent = authorList || "Unknown authors";
+
+            if (paper.year) {
+                year.textContent = paper.year.toString();
+            } else {
+                year.style.display = "none";
+            }
+
+            if (paper.venue) {
+                venue.textContent = paper.venue;
+            } else {
+                venue.style.display = "none";
+            }
+
+            // Add AI score
+            scoreEl.textContent = item.score.toFixed(3);
+            scoreEl.title = item.reason || "No reason provided";
+            
+            // Add reason as a visible tag
+            if (item.reason) {
+                const reasonTag = document.createElement("span");
+                reasonTag.className = "reason-tag";
+                reasonTag.textContent = "AI Reason";
+                reasonTag.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    this.showReasonPopup(item.reason, paper.title);
+                });
+                article.querySelector(".paper-meta").appendChild(reasonTag);
+            }
+
+            copy.addEventListener("click", () => {
+                const citation = this.buildCitation(paper);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(citation)
+                        .then(() => this.markCopyButton(copy, "✓"))
+                        .catch(() => {
+                            this.fallbackCopy(citation);
+                            this.markCopyButton(copy, "✓");
+                        });
+                } else {
+                    this.fallbackCopy(citation);
+                    this.markCopyButton(copy, "✓");
+                }
+            });
+
+            fragment.appendChild(node);
         });
 
-        this.refs.deleteForm.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            await this.submitCommandForm(event.currentTarget, "/api/papers", "DELETE");
-        });
+        container.appendChild(fragment);
+    }
+
+    showReasonPopup(reason, paperTitle) {
+        // Remove existing popup if any
+        const existingPopup = document.querySelector('.reason-popup-overlay');
+        if (existingPopup) {
+            existingPopup.remove();
+        }
+
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'reason-popup-overlay';
+        overlay.addEventListener('click', () => this.closeReasonPopup());
+
+        // Create popup
+        const popup = document.createElement('div');
+        popup.className = 'reason-popup';
+        popup.innerHTML = `
+            <div class="reason-popup-header">
+                <h3 class="reason-popup-title">AI Reasoning</h3>
+                <button class="reason-popup-close" type="button">&times;</button>
+            </div>
+            <div class="reason-popup-content">
+                <p><strong>Paper:</strong> ${paperTitle}</p>
+                <p><strong>Reason:</strong></p>
+                <p>${reason}</p>
+            </div>
+        `;
+
+        // Add close button event
+        popup.querySelector('.reason-popup-close').addEventListener('click', () => this.closeReasonPopup());
+
+        // Add to DOM
+        overlay.appendChild(popup);
+        document.body.appendChild(overlay);
+
+        // Prevent popup clicks from closing
+        popup.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    closeReasonPopup() {
+        const popup = document.querySelector('.reason-popup-overlay');
+        if (popup) {
+            popup.remove();
+        }
     }
 
     async submitCommandForm(form, endpoint, method, onSuccess) {
@@ -224,11 +434,39 @@ class PFDRDashboard {
         return summary.slice(0, 220);
     }
 
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        
+        let newTheme;
+        if (currentTheme === 'dark') {
+            newTheme = 'light';
+        } else if (currentTheme === 'light') {
+            newTheme = 'dark';
+        } else {
+            // Handle 'auto' or any other value
+            newTheme = 'dark';
+        }
+        
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('pfdr-theme', newTheme);
+        
+        // Force a style recalculation
+        document.body.style.display = 'none';
+        document.body.offsetHeight; // Trigger reflow
+        document.body.style.display = '';
+    }
+
+    initTheme() {
+        const savedTheme = localStorage.getItem('pfdr-theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+    }
+
     async refreshAll() {
         await Promise.all([
             this.loadPapers(),
-            this.loadTasks(),
-            this.loadSources()
+            this.loadTasks()
         ]);
         this.onSearch();
         this.updateSummary();
@@ -260,20 +498,6 @@ class PFDRDashboard {
         } catch (error) {
             console.error(error);
             this.renderTasks([]);
-        }
-    }
-
-    async loadSources() {
-        try {
-            const response = await fetch("/api/sources");
-            if (!response.ok) {
-                throw new Error(`Failed to load sources (${response.status})`);
-            }
-            const payload = await response.json();
-            this.renderSources(payload.sources || []);
-        } catch (error) {
-            console.error(error);
-            this.renderSources([]);
         }
     }
 
@@ -486,8 +710,10 @@ class PFDRDashboard {
             const article = node.querySelector(".paper-row");
             const title = node.querySelector(".paper-title");
             const authors = node.querySelector(".paper-authors");
-            const tags = node.querySelector(".paper-tags");
-            const copy = node.querySelector(".icon-button");
+            const year = node.querySelector(".paper-year");
+            const venue = node.querySelector(".paper-venue");
+            const scoreEl = node.querySelector(".paper-score");
+            const copy = node.querySelector(".action-btn");
 
             title.textContent = paper.title || "Untitled paper";
             if (paper.url) {
@@ -501,18 +727,22 @@ class PFDRDashboard {
             const authorList = Array.isArray(paper.authors) ? paper.authors.join(", ") : "";
             authors.textContent = authorList || "Unknown authors";
 
-            tags.innerHTML = "";
             if (paper.year) {
-                tags.appendChild(this.tagNode(paper.year.toString()));
+                year.textContent = paper.year.toString();
+            } else {
+                year.style.display = "none";
             }
+
             if (paper.venue) {
-                tags.appendChild(this.tagNode(paper.venue));
+                venue.textContent = paper.venue;
+            } else {
+                venue.style.display = "none";
             }
-            if (paper.source && paper.source !== paper.venue) {
-                tags.appendChild(this.tagNode(paper.source));
-            }
+
             if (score && this.state.query) {
-                tags.appendChild(this.tagNode(`score ${score.toFixed(2)}`));
+                scoreEl.textContent = score.toFixed(3);
+            } else {
+                scoreEl.style.display = "none";
             }
 
             copy.addEventListener("click", () => {
@@ -581,42 +811,20 @@ class PFDRDashboard {
         this.refs.tasksContainer.innerHTML = "";
         const fragment = document.createDocumentFragment();
 
-        tasks.slice(0, 6).forEach((task) => {
+        tasks.slice(0, 5).forEach((task) => {
             const node = this.refs.taskTemplate.content.cloneNode(true);
-            node.querySelector(".task-type").textContent = task.task_type || "task";
-            node.querySelector(".task-status").textContent = task.status || "";
-            node.querySelector(".task-updated").textContent = this.timeAgo(task.updated_at);
+            node.querySelector(".status-type").textContent = task.task_type || "task";
+            node.querySelector(".status-badge").textContent = task.status || "";
+            node.querySelector(".status-time").textContent = this.timeAgo(task.updated_at);
             fragment.appendChild(node);
         });
 
         this.refs.tasksContainer.appendChild(fragment);
-        this.refs.taskCount.textContent = tasks.length.toString();
-    }
-
-    renderSources(sources) {
-        this.refs.sourcesContainer.innerHTML = "";
-        const fragment = document.createDocumentFragment();
-
-        sources.forEach((source) => {
-            const node = this.refs.sourceTemplate.content.cloneNode(true);
-            node.querySelector(".source-name").textContent = source.name || source.source_url || "source";
-            node.querySelector(".source-url").textContent = source.source_url || source.url || "—";
-            fragment.appendChild(node);
-        });
-
-        this.refs.sourcesContainer.appendChild(fragment);
-        this.refs.sourceCount.textContent = sources.length.toString();
     }
 
     updateSummary() {
-        this.refs.paperCount.textContent = this.papers.length.toString();
-        this.refs.authorCount.textContent = this.authors.size.toString();
-    }
-
-    updateMeta() {
-        const visible = this.filtered.length;
-        const total = this.papers.length;
-        this.refs.resultMeta.textContent = `Showing ${visible} of ${total}`;
+        this.refs.paperCount.textContent = `${this.papers.length} papers`;
+        this.refs.authorCount.textContent = `${this.authors.size} authors`;
     }
 
     collectAuthors(papers) {
@@ -625,6 +833,12 @@ class PFDRDashboard {
             (paper.authors || []).forEach((author) => authors.add(author));
         });
         return authors;
+    }
+
+    updateMeta() {
+        const visible = this.filtered.length;
+        const total = this.papers.length;
+        this.refs.resultMeta.textContent = `${visible} results`;
     }
 
     timeAgo(timestamp) {

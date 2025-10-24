@@ -1,184 +1,213 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PFDR Console</title>
+    <title>PFDR</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header class="app-header">
-        <div class="brand">
-            <span class="brand-title">PFDR Console</span>
-            <span class="brand-subtitle">DBLP ingestion &amp; paper discovery</span>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <h1>PFDR</h1>
+                <span class="nav-subtitle">Paper Finder</span>
+            </div>
+            <div class="nav-actions">
+                <button id="themeToggle" class="nav-btn" aria-label="Toggle theme">
+                    <svg class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    </svg>
+                </button>
+                <button id="refreshButton" class="nav-btn" aria-label="Refresh data">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                        <path d="M21 3v5h-5"/>
+                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        <path d="M3 21v-5h5"/>
+                    </svg>
+                </button>
+            </div>
         </div>
-        <div class="header-actions">
-            <button id="refreshButton" type="button" class="ghost-button">Refresh</button>
-        </div>
-    </header>
+    </nav>
 
-    <main class="layout">
-        <section class="panel search-panel">
-            <div class="search-bar">
-                <input id="searchInput" type="search" placeholder="Fuzzy search papers, authors, venues, DOIs…" autocomplete="off">
-                <div class="search-controls">
-                    <label>
-                        Mode
-                        <select id="searchScope">
-                            <option value="all" selected>Anywhere</option>
-                            <option value="title">Title</option>
-                            <option value="authors">Authors</option>
-                            <option value="venue">Venue</option>
-                            <option value="abstract">Abstract</option>
-                        </select>
-                    </label>
-                    <label>
-                        Sort
-                        <select id="sortMode">
-                            <option value="relevance" selected>By relevance</option>
-                            <option value="year_desc">Year ⬇︎</option>
-                            <option value="year_asc">Year ⬆︎</option>
-                            <option value="title">Title A→Z</option>
-                        </select>
-                    </label>
-                    <label class="toggle">
+    <main class="main-container">
+        <!-- Search Section -->
+        <section class="search-section">
+            <div class="search-container">
+                <div class="search-input-group">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input id="searchInput" type="search" placeholder="Search papers, authors, venues..." autocomplete="off">
+                </div>
+                <div class="search-filters">
+                    <select id="searchScope" class="filter-select">
+                        <option value="all">All fields</option>
+                        <option value="title">Title only</option>
+                        <option value="authors">Authors only</option>
+                        <option value="venue">Venue only</option>
+                    </select>
+                    <select id="sortMode" class="filter-select">
+                        <option value="relevance">Relevance</option>
+                        <option value="year_desc">Year ↓</option>
+                        <option value="year_asc">Year ↑</option>
+                        <option value="title">Title A-Z</option>
+                    </select>
+                    <label class="filter-toggle">
                         <input id="strictToggle" type="checkbox">
-                        <span>Strict match</span>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Strict</span>
                     </label>
                 </div>
             </div>
-            <div class="summary">
-                <div class="summary-item">
-                    <div class="summary-value" id="paperCount">0</div>
-                    <div class="summary-label">Papers loaded</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-value" id="authorCount">0</div>
-                    <div class="summary-label">Authors indexed</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-value" id="taskCount">0</div>
-                    <div class="summary-label">Active tasks</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-value" id="sourceCount">0</div>
-                    <div class="summary-label">Sources tracked</div>
-                </div>
+            
+            <!-- Simple Stats -->
+            <div class="simple-stats">
+                <span id="paperCount">0 papers</span>
+                <span id="authorCount">0 authors</span>
             </div>
         </section>
 
-        <section class="panel main-panel">
-            <header class="panel-header">
-                <h2>Papers</h2>
-                <span id="resultMeta" class="result-meta">Showing 0 of 0</span>
-            </header>
-            <div id="papersContainer" class="paper-list" role="list"></div>
-        </section>
-
-        <aside class="panel sidebar">
-            <section class="card">
-                <h3>Command Center</h3>
-                <p class="card-hint">Trigger familiar CLI workflows directly from the browser.</p>
-
-                <form id="fetchForm" class="form-section">
-                    <h4>`pfdr fetch`</h4>
-                    <label>
-                        Source URL
-                        <input type="url" name="source_url" placeholder="https://dblp.org/search?...">
-                    </label>
-                    <label>
-                        Target name
-                        <input type="text" name="target_name" placeholder="target-id">
-                    </label>
-                    <label class="inline">
-                        <input type="checkbox" name="all_targets">
-                        <span>All enabled targets</span>
-                    </label>
-                    <label>
-                        Page size
-                        <input type="number" name="page_size" min="50" max="500" value="200">
-                    </label>
-                    <label>
-                        Max entries
-                        <input type="number" name="max_entries" min="1" placeholder="Optional">
-                    </label>
-                    <button type="submit">Start fetch</button>
-                    <output></output>
-                </form>
-
-                <form id="queryForm" class="form-section">
-                    <h4>`pfdr query`</h4>
-                    <label>
-                        Prompt
-                        <textarea name="prompt" rows="3" placeholder="Ask DeepSeek to rank papers…"></textarea>
-                    </label>
-                    <label>
-                        Top K
-                        <input type="number" name="top_k" min="1" max="50" value="10">
-                    </label>
-                    <button type="submit">Run query</button>
-                    <output></output>
-                </form>
-
-                <form id="deleteForm" class="form-section">
-                    <h4>`pfdr remove`</h4>
-                    <label>
-                        Pattern
-                        <input type="text" name="pattern" placeholder="Substring to match source URL">
-                    </label>
-                    <label>
-                        Source URL
-                        <input type="url" name="source_url" placeholder="Exact source URL">
-                    </label>
-                    <label>
-                        Target name
-                        <input type="text" name="target_name" placeholder="Configured target name">
-                    </label>
-                    <button type="submit" class="danger">Remove</button>
-                    <output></output>
-                </form>
+        <!-- Main Content Area -->
+        <div class="content-grid">
+            <!-- Papers List -->
+            <section class="papers-section">
+                <div class="section-header">
+                    <h2>Papers</h2>
+                    <span id="resultMeta" class="result-meta">0 results</span>
+                </div>
+                <div id="papersContainer" class="papers-list"></div>
             </section>
 
-            <section class="card" id="tasksCard">
-                <h3>Recent Tasks</h3>
-                <div class="tasks-list" id="tasksContainer"></div>
-            </section>
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <!-- AI Query -->
+                <div class="sidebar-card">
+                    <div class="card-header">
+                        <h3>AI Query</h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                    </div>
+                    <form id="queryForm" class="query-form">
+                        <div class="form-group">
+                            <label for="prompt">Query</label>
+                            <textarea id="prompt" name="prompt" rows="3" placeholder="Describe what you're looking for..."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="top_k">Results</label>
+                                <input type="number" id="top_k" name="top_k" min="1" max="50" value="10">
+                            </div>
+                            <button type="submit" class="btn-primary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                Query
+                            </button>
+                        </div>
+                        <output class="form-output"></output>
+                    </form>
+                </div>
 
-            <section class="card" id="sourcesCard">
-                <h3>Sources</h3>
-                <div class="sources-list" id="sourcesContainer"></div>
-            </section>
-        </aside>
+                <!-- Data Management -->
+                <div class="sidebar-card">
+                    <div class="card-header">
+                        <h3>Data</h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                        </svg>
+                    </div>
+                    <form id="fetchForm" class="data-form">
+                        <div class="form-group">
+                            <label for="source_url">Source URL</label>
+                            <input type="url" id="source_url" name="source_url" placeholder="https://dblp.org/search?...">
+                        </div>
+                        <div class="form-group">
+                            <label for="target_name">Target Name</label>
+                            <input type="text" id="target_name" name="target_name" placeholder="conference-2024">
+                        </div>
+                        <div class="form-row">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="all_targets">
+                                <span class="checkbox-custom"></span>
+                                All targets
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="page_size">Page Size</label>
+                                <input type="number" id="page_size" name="page_size" min="50" max="500" value="200">
+                            </div>
+                            <button type="submit" class="btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                    <polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                </svg>
+                                Fetch
+                            </button>
+                        </div>
+                        <output class="form-output"></output>
+                    </form>
+                </div>
+
+                <!-- System Status -->
+                <div class="sidebar-card">
+                    <div class="card-header">
+                        <h3>Status</h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
+                        </svg>
+                    </div>
+                    <div class="status-list" id="tasksContainer"></div>
+                </div>
+            </aside>
+        </div>
     </main>
 
     <template id="paperRowTemplate">
-        <article class="paper-row" role="listitem">
-            <div class="paper-meta">
-                <a class="paper-title" target="_blank" rel="noopener"></a>
-                <div class="paper-authors"></div>
-                <div class="paper-tags"></div>
+        <div class="paper-row">
+            <div class="paper-content">
+                <a class="paper-title" href="#" target="_blank" rel="noopener"></a>
+                <span class="paper-authors"></span>
+                <div class="paper-meta">
+                    <span class="paper-year"></span>
+                    <span class="paper-venue"></span>
+                    <span class="paper-score"></span>
+                </div>
             </div>
-            <button type="button" class="icon-button" title="Copy citation">⧉</button>
-        </article>
-    </template>
-
-    <template id="taskTemplate">
-        <div class="task-row">
-            <div>
-                <strong class="task-type"></strong>
-                <span class="task-status"></span>
-            </div>
-            <small class="task-updated"></small>
+            <button type="button" class="action-btn" title="Copy citation">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                </svg>
+            </button>
         </div>
     </template>
 
-    <template id="sourceTemplate">
-        <div class="source-row">
-            <span class="source-name"></span>
-            <small class="source-url"></small>
+    <template id="taskTemplate">
+        <div class="status-item">
+            <div class="status-info">
+                <span class="status-type"></span>
+                <span class="status-badge"></span>
+            </div>
+            <span class="status-time"></span>
         </div>
     </template>
 
     <script src="/static/app.js" defer></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            new PFDRDashboard().init();
+        });
+    </script>
 </body>
 </html>

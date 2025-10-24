@@ -123,7 +123,7 @@ def query(
 
     ranked = service.rank(QueryOptions(prompt=prompt, top_k=top_k), papers=papers)
 
-    if service.client.is_configured:
+    if service.client.backend and getattr(service.client.backend, "is_configured", False):
         print("Using DeepSeek API for semantic ranking...")
     else:
         print("DeepSeek API not configured, using keyword-based ranking...")
@@ -327,8 +327,8 @@ def webui(
     webui.run(host=final_host, port=final_port, reload=final_reload)
 
 
-@app.command()
-def list(
+@app.command(name="list")
+def list_items(
     sources: bool = typer.Option(False, "--sources", help="List ingestion sources"),
     papers: bool = typer.Option(False, "--papers", help="List papers"),
     authors: bool = typer.Option(False, "--authors", help="List authors"),
@@ -354,8 +354,8 @@ def list(
         items = list(mapping.items())[:limit]
         if json_output:
             payload = {
-                source: [paper.to_dict() for paper in papers]
-                for source, papers in items
+                source: [paper.to_dict() for paper in papers_for_source]
+                for source, papers_for_source in items
             }
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             return
