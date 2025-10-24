@@ -20,6 +20,7 @@ from .models import Paper, TaskMeta
 from .state import IngestionStateStore
 from .storage import PaperStore
 from .tasks import TaskManager
+from .services.enrichment import PaperEnrichmentService
 
 
 class WebUI:
@@ -60,7 +61,12 @@ class WebUI:
             return self.templates.TemplateResponse("index.html", {"request": request})
         
         @self.app.get("/api/papers")
-        async def get_papers(limit: int = 1000, pattern: Optional[str] = None):
+        async def get_papers(
+            limit: int = 1000, 
+            pattern: Optional[str] = None,
+            category: Optional[str] = None,
+            keyword: Optional[str] = None
+        ):
             """Get papers with optional filtering."""
             store = PaperStore(self.settings)
             papers = store.list()
@@ -68,8 +74,24 @@ class WebUI:
             if pattern:
                 papers = [p for p in papers if pattern.lower() in p.title.lower()]
             
+            if category:
+                papers = [p for p in papers if p.category and category.lower() in p.category.lower()]
+            
+            if keyword:
+                papers = [p for p in papers if any(keyword.lower() in kw.lower() for kw in p.keywords)]
+            
             papers = papers[:limit]
-            return {"papers": [paper.to_dict() for paper in papers]}
+            
+            # Add color information for each paper's category
+            from pfdr.services.enrichment import get_category_color
+            papers_with_colors = []
+            for paper in papers:
+                paper_dict = paper.to_dict()
+                if paper.category:
+                    paper_dict["category_color"] = get_category_color(paper.category)
+                papers_with_colors.append(paper_dict)
+            
+            return {"papers": papers_with_colors}
         
         @self.app.get("/api/sources")
         async def get_sources():
@@ -304,6 +326,112 @@ class WebUI:
                 "authors": [
                     {"author": author, "paper_count": count}
                     for author, count in sorted_authors
+                ]
+            }
+        
+        @self.app.post("/api/enrich")
+        async def enrich_papers(
+            enrich_abstracts: bool = Form(True),
+            extract_keywords: bool = Form(True),
+            cluster_papers: bool = Form(True),
+            limit: Optional[int] = Form(None)
+        ):
+            """Enrich papers with abstracts, keywords, and categories."""
+            store = PaperStore(self.settings)
+            papers = store.list()
+            
+            if not papers:
+                raise HTTPException(400, "No papers stored. Run fetch first.")
+            
+            # Filter papers that need enrichment
+            papers_to_enrich = []
+            for paper in papers:
+                needs_enrichment = False
+                if enrich_abstracts and not paper.abstract:
+                    needs_enrichment = True
+                if extract_keywords and not paper.keywords:
+                    needs_enrichment = True
+                if cluster_papers and not paper.category:
+                    needs_enrichment = True
+                
+                if needs_enrichment:
+                    papers_to_enrich.append(paper)
+            
+            if limit:
+                papers_to_enrich = papers_to_enrich[:limit]
+            
+            if not papers_to_enrich:
+                return {"message": "No papers need enrichment", "enriched_count": 0}
+            
+            # Enrich papers
+            enrichment_service = PaperEnrichmentService(self.settings)
+            results = await enrichment_service.enrich_papers_batch(papers_to_enrich)
+            
+            # Update papers in storage
+            enriched_count = 0
+            for result in results:
+                if result.success:
+                    paper = result.paper
+                    if result.abstract:
+                        paper.abstract = result.abstract
+                    if result.keywords:
+                        paper.keywords = result.keywords
+                    if result.category:
+                        paper.category = result.category
+                    
+                    store.update(paper)
+                    enriched_count += 1
+            
+            return {
+                "message": f"Enriched {enriched_count} papers",
+                "enriched_count": enriched_count,
+                "total_processed": len(results)
+            }
+        
+        @self.app.get("/api/categories")
+        async def get_categories():
+            """Get paper categories with counts and colors."""
+            from pfdr.services.enrichment import get_category_color
+            
+            store = PaperStore(self.settings)
+            papers = store.list()
+            
+            category_counts = {}
+            for paper in papers:
+                if paper.category:
+                    category_counts[paper.category] = category_counts.get(paper.category, 0) + 1
+            
+            sorted_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+            
+            return {
+                "categories": [
+                    {
+                        "category": category, 
+                        "count": count,
+                        "color": get_category_color(category)
+                    }
+                    for category, count in sorted_categories
+                ]
+            }
+        
+        @self.app.get("/api/keywords")
+        async def get_keywords(limit: int = 50):
+            """Get most common keywords."""
+            store = PaperStore(self.settings)
+            papers = store.list()
+            
+            keyword_counts = {}
+            for paper in papers:
+                for keyword in paper.keywords:
+                    keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+            
+            sorted_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)
+            sorted_keywords = sorted_keywords[:limit]
+            
+            return {
+                "keywords": [
+                    {"keyword": keyword, "count": count}
+                    for keyword, count in sorted_keywords
                 ]
             }
     

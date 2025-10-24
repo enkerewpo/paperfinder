@@ -48,6 +48,20 @@ class PaperStore:
             with self.settings.papers_path.open("w", encoding="utf-8") as fh:
                 json.dump(payload, fh, ensure_ascii=False, indent=2)
 
+    def update(self, paper: Paper) -> None:
+        """Update a single paper in the store."""
+        papers = self.list()
+        # Find and update the paper
+        for i, existing_paper in enumerate(papers):
+            if existing_paper.identifier == paper.identifier:
+                papers[i] = paper
+                break
+        else:
+            # Paper not found, add it
+            papers.append(paper)
+        
+        self.save_all(papers)
+
     def upsert_many(self, papers: Iterable[Paper]) -> list[Paper]:
         existing = {paper.identifier: paper for paper in self.list()}
         changed = False

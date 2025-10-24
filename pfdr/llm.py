@@ -112,6 +112,14 @@ class AdaptiveLLMClient:
 
         return self.fallback.rank_papers(query, paper_list, top_k=top_k)
 
+    async def chat_completion(self, messages: list[dict], temperature: float = 0.7) -> str:
+        """Chat completion method for enrichment services."""
+        if self.backend and hasattr(self.backend, 'chat_completion'):
+            return await self.backend.chat_completion(messages, temperature=temperature)
+        else:
+            # Fallback: return a simple response
+            return "LLM not configured or available"
+
 
 def create_llm_client(settings: Settings, *, timeout: int = 60) -> AdaptiveLLMClient:
     """Construct an adaptive client based on configuration."""

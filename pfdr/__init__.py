@@ -1,6 +1,6 @@
 """pfdr - DBLP ingestion and DeepSeek-powered querying for academic papers."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from .config import Settings
 from .models import Paper, TaskMeta, TaskStatus

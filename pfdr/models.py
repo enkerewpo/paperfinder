@@ -31,6 +31,8 @@ class Paper:
     abstract: str | None = None
     venue: str | None = None
     source: str | None = None
+    keywords: list[str] = field(default_factory=list)  # AI-generated keywords
+    category: str | None = None  # AI-generated category/cluster
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,6 +45,8 @@ class Paper:
             "abstract": self.abstract,
             "venue": self.venue,
             "source": self.source,
+            "keywords": self.keywords,
+            "category": self.category,
         }
 
     @classmethod
@@ -57,6 +61,8 @@ class Paper:
             abstract=payload.get("abstract"),
             venue=payload.get("venue"),
             source=payload.get("source"),
+            keywords=list(payload.get("keywords") or []),
+            category=payload.get("category"),
         )
 
 

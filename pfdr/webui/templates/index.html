@@ -6,6 +6,7 @@
     <title>PFDR - Paper Finder</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- Navigation -->
@@ -51,6 +52,11 @@
                             <option value="title">Title only</option>
                             <option value="authors">Authors only</option>
                             <option value="venue">Venue only</option>
+                            <option value="keywords">Keywords only</option>
+                            <option value="category">Category only</option>
+                        </select>
+                        <select id="categoryFilter" class="form-select form-select-sm">
+                            <option value="">All categories</option>
                         </select>
                         <select id="sortMode" class="form-select form-select-sm">
                             <option value="relevance">Relevance</option>
@@ -137,16 +143,54 @@
                         </div>
                     </div>
 
-                    <!-- Tasks -->
+                    <!-- Paper Enrichment -->
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">Enrichment</h6>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                        </div>
+                        <div class="card-body">
+                            <form id="enrichForm">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input id="enrichAbstracts" class="form-check-input" type="checkbox" checked>
+                                        <label class="form-check-label small" for="enrichAbstracts">Abstracts</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input id="extractKeywords" class="form-check-input" type="checkbox" checked>
+                                        <label class="form-check-label small" for="extractKeywords">Keywords</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input id="clusterPapers" class="form-check-input" type="checkbox" checked>
+                                        <label class="form-check-label small" for="clusterPapers">Categories</label>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="enrichLimit" class="form-label small">Limit</label>
+                                    <input id="enrichLimit" name="limit" type="number" class="form-control form-control-sm" min="1" max="100" placeholder="All">
+                                </div>
+                                <button type="submit" class="btn btn-success btn-sm w-100">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                    </svg>
+                                    Enrich Papers
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Categories & Keywords -->
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">Tasks</h6>
+                            <h6 class="mb-0">Categories</h6>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 11H5a2 2 0 00-2 2v3c0 1.1.9 2 2 2h4m0-7h10a2 2 0 012 2v3c0 1.1-.9 2-2 2H9m0-7V9a2 2 0 012-2h2a2 2 0 012 2v2"/>
+                                <path d="M3 3h18v18H3zM9 9h6v6H9z"/>
                             </svg>
                         </div>
                         <div class="card-body p-0">
-                            <div id="tasksContainer" class="list-group list-group-flush"></div>
+                            <div id="categoriesContainer" class="list-group list-group-flush"></div>
                         </div>
                     </div>
                 </div>
@@ -157,8 +201,30 @@
                 <div class="p-3">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0">Papers</h5>
-                        <span id="resultMeta" class="text-muted small">0 results</span>
+                        <div class="d-flex gap-2 align-items-center">
+                            <button id="showChartBtn" class="btn btn-outline-primary btn-sm">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 3v18h18"/>
+                                    <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+                                </svg>
+                                Chart
+                            </button>
+                            <span id="resultMeta" class="text-muted small">0 results</span>
+                        </div>
                     </div>
+                    
+                    <!-- Chart Container -->
+                    <div id="chartContainer" class="mb-3" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <canvas id="categoryChart" width="400" height="200"></canvas>
+                            </div>
+                            <div class="col-md-6">
+                                <canvas id="keywordChart" width="400" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div id="papersContainer" class="papers-list"></div>
                 </div>
             </div>
@@ -175,15 +241,31 @@
                     <div class="paper-meta d-flex gap-3 mt-1">
                         <span class="paper-year text-muted small"></span>
                         <span class="paper-venue text-muted small"></span>
+                        <span class="paper-category badge bg-info"></span>
                         <span class="paper-score badge bg-primary"></span>
                     </div>
+                    <div class="paper-keywords mt-1">
+                        <span class="paper-keyword badge bg-light text-dark me-1"></span>
+                    </div>
+                    <div class="paper-abstract text-muted small mt-2" style="display: none;"></div>
                 </div>
-                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" title="Copy citation">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                    </svg>
-                </button>
+                <div class="d-flex flex-column gap-1">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" title="Copy citation">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-sm" title="Toggle abstract">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14,2 14,8 20,8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10,9 9,9 8,9"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     </template>
@@ -198,6 +280,18 @@
                     <small class="text-muted task-meta"></small>
                 </div>
                 <span class="badge task-status"></span>
+            </div>
+        </div>
+    </template>
+
+    <!-- Category Template -->
+    <template id="categoryTemplate">
+        <div class="list-group-item category-item" style="cursor: pointer;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="flex-grow-1">
+                    <span class="category-name fw-medium"></span>
+                </div>
+                <span class="badge bg-secondary category-count"></span>
             </div>
         </div>
     </template>
