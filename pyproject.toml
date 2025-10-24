@@ -19,7 +19,7 @@ path = "pfdr/__init__.py"
 [project]
 name = "pfdr"
 dynamic = ["version"]
-description = "DBLP ingestion and DeepSeek-powered querying for academic papers"
+description = "DBLP ingestion and AI-powered querying for academic papers"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -28,7 +28,7 @@ authors = [
 maintainers = [
     {name = "wheatfox", email = "wheatfox17@icloud.com"}
 ]
-keywords = ["dblp", "academic", "papers", "deepseek", "ai", "research"]
+keywords = ["dblp", "academic", "papers", "LLM", "AI", "research"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -56,7 +56,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "black",
+    "ruff",
     "flake8",
 ]
 
