@@ -146,7 +146,12 @@ class PFDRDashboard {
     }
 
     showQueryResults(results, query) {
+        console.log("Showing query results:", results.length, "results for query:", query);
         const container = this.refs.papersContainer;
+        if (!container) {
+            console.error("papersContainer not found in showQueryResults!");
+            return;
+        }
         container.innerHTML = "";
 
         // Add query header
@@ -170,7 +175,7 @@ class PFDRDashboard {
             const year = node.querySelector(".paper-year");
             const venue = node.querySelector(".paper-venue");
             const scoreEl = node.querySelector(".paper-score");
-            const copy = node.querySelector(".action-btn");
+            const copy = node.querySelector("button[title='Copy citation']");
 
             // Add ranking number
             article.classList.add("query-result");
@@ -216,20 +221,22 @@ class PFDRDashboard {
                 article.querySelector(".paper-meta").appendChild(reasonTag);
             }
 
-            copy.addEventListener("click", () => {
-                const citation = this.buildCitation(paper);
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(citation)
-                        .then(() => this.markCopyButton(copy, "✓"))
-                        .catch(() => {
-                            this.fallbackCopy(citation);
-                            this.markCopyButton(copy, "✓");
-                        });
-                } else {
-                    this.fallbackCopy(citation);
-                    this.markCopyButton(copy, "✓");
-                }
-            });
+            if (copy) {
+                copy.addEventListener("click", () => {
+                    const citation = this.buildCitation(paper);
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(citation)
+                            .then(() => this.markCopyButton(copy, "✓"))
+                            .catch(() => {
+                                this.fallbackCopy(citation);
+                                this.markCopyButton(copy, "✓");
+                            });
+                    } else {
+                        this.fallbackCopy(citation);
+                        this.markCopyButton(copy, "✓");
+                    }
+                });
+            }
 
             fragment.appendChild(node);
         });
@@ -682,7 +689,7 @@ class PFDRDashboard {
             const year = node.querySelector(".paper-year");
             const venue = node.querySelector(".paper-venue");
             const scoreEl = node.querySelector(".paper-score");
-            const copy = node.querySelector(".action-btn");
+            const copy = node.querySelector("button[title='Copy citation']");
 
             title.textContent = paper.title || "Untitled paper";
             if (paper.url) {

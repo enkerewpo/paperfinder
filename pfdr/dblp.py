@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -43,13 +44,32 @@ class DblpClient:
             request_url,
             headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
         )
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            raise RuntimeError(f"DBLP returned HTTP {exc.code}: {exc.reason}") from exc
-        except URLError as exc:
-            raise RuntimeError(f"Unable to reach DBLP: {exc.reason}") from exc
+        
+        # Retry mechanism for HTTP errors
+        max_retries = 5
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                break  # Success, exit retry loop
+            except HTTPError as exc:
+                if attempt < max_retries - 1:  # Not the last attempt
+                    print(f"  HTTP {exc.code} error on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                else:
+                    raise RuntimeError(f"DBLP returned HTTP {exc.code}: {exc.reason} after {max_retries} attempts") from exc
+            except URLError as exc:
+                if attempt < max_retries - 1:  # Not the last attempt
+                    print(f"  Network error on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                else:
+                    raise RuntimeError(f"Unable to reach DBLP: {exc.reason} after {max_retries} attempts") from exc
 
         hits = payload.get("result", {}).get("hits", {}).get("hit", [])
         if isinstance(hits, dict):
