@@ -59,7 +59,7 @@ class PaperStore:
         else:
             # Paper not found, add it
             papers.append(paper)
-        
+
         self.save_all(papers)
 
     def upsert_many(self, papers: Iterable[Paper]) -> list[Paper]:

@@ -82,7 +82,7 @@ class DeepSeekClient:
             raise RuntimeError(f"DeepSeek HTTP error {exc.code}: {exc.reason}") from exc
         except URLError as exc:  # pragma: no cover - network specific
             raise RuntimeError(f"DeepSeek network error: {exc.reason}") from exc
-        
+
         print("Processing API response...")
 
         message = payload.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -93,7 +93,7 @@ class DeepSeekClient:
 
         ranked: list[RankedPaper] = []
         results = structured.get("results", [])
-        
+
         for item in results:
             paper_id = item.get("id")
             score = float(item.get("score", 0.0))
@@ -147,18 +147,20 @@ class DeepSeekClient:
             "temperature": 0.2,
         }
 
-    async def chat_completion(self, messages: list[dict], temperature: float = 0.7) -> str:
+    async def chat_completion(
+        self, messages: list[dict], temperature: float = 0.7
+    ) -> str:
         """Chat completion method for enrichment services."""
         if not self.is_configured:
             return "DeepSeek API not configured"
-        
+
         try:
             request_payload = {
                 "model": self.settings.llm_model,
                 "messages": messages,
                 "temperature": temperature,
             }
-            
+
             endpoint = f"{self.settings.llm_api_base.rstrip('/')}/chat/completions"
             request = Request(
                 endpoint,
@@ -168,11 +170,11 @@ class DeepSeekClient:
                     "Content-Type": "application/json",
                 },
             )
-            
+
             with urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-            
+
             return payload.get("choices", [{}])[0].get("message", {}).get("content", "")
-            
+
         except Exception as e:
             raise RuntimeError(f"DeepSeek chat completion error: {e}") from e

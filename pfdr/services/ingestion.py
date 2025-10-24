@@ -120,15 +120,9 @@ class IngestionService:
         state_store = IngestionStateStore(self.settings)
         states = state_store.list()
         sources = self._determine_removal_sources(options, states=states)
-        papers = [
-            paper
-            for paper in self.paper_store.list()
-            if paper.source in sources
-        ]
+        papers = [paper for paper in self.paper_store.list() if paper.source in sources]
         state_urls = [
-            state.source_url
-            for state in states
-            if state.source_url in sources
+            state.source_url for state in states if state.source_url in sources
         ]
         return RemovalPlan(sources=sources, papers=papers, state_urls=state_urls)
 

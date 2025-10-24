@@ -66,7 +66,9 @@ class OpenAIClient:
     ) -> list[RankedPaper]:
         print("Sending request to OpenAI API...")
         request_payload = self._build_prompt(query, papers, top_k=top_k)
-        api_base = (self.settings.llm_api_base or "https://api.openai.com/v1").rstrip("/")
+        api_base = (self.settings.llm_api_base or "https://api.openai.com/v1").rstrip(
+            "/"
+        )
         endpoint = f"{api_base}/chat/completions"
         request = Request(
             endpoint,
@@ -96,7 +98,9 @@ class OpenAIClient:
             paper_id = item.get("id")
             score = float(item.get("score", 0.0))
             reason = item.get("reason", "")
-            match = next((paper for paper in papers if paper.identifier == paper_id), None)
+            match = next(
+                (paper for paper in papers if paper.identifier == paper_id), None
+            )
             if match is None:
                 continue
             ranked.append(RankedPaper(paper=match, score=score, reason=reason))
@@ -148,19 +152,23 @@ class OpenAIClient:
             "temperature": 0.2,
         }
 
-    async def chat_completion(self, messages: list[dict], temperature: float = 0.7) -> str:
+    async def chat_completion(
+        self, messages: list[dict], temperature: float = 0.7
+    ) -> str:
         """Chat completion method for enrichment services."""
         if not self.is_configured:
             return "OpenAI API not configured"
-        
+
         try:
             request_payload = {
                 "model": self.settings.llm_model or "gpt-4o-mini",
                 "messages": messages,
                 "temperature": temperature,
             }
-            
-            api_base = (self.settings.llm_api_base or "https://api.openai.com/v1").rstrip("/")
+
+            api_base = (
+                self.settings.llm_api_base or "https://api.openai.com/v1"
+            ).rstrip("/")
             endpoint = f"{api_base}/chat/completions"
             request = Request(
                 endpoint,
@@ -170,15 +178,14 @@ class OpenAIClient:
                     "Content-Type": "application/json",
                 },
             )
-            
+
             with urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-            
+
             return payload.get("choices", [{}])[0].get("message", {}).get("content", "")
-            
+
         except Exception as e:
             raise RuntimeError(f"OpenAI chat completion error: {e}") from e
 
 
 __all__ = ["OpenAIClient"]
-

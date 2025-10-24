@@ -124,7 +124,9 @@ def query(
 
     ranked = service.rank(QueryOptions(prompt=prompt, top_k=top_k), papers=papers)
 
-    if service.client.backend and getattr(service.client.backend, "is_configured", False):
+    if service.client.backend and getattr(
+        service.client.backend, "is_configured", False
+    ):
         print("Using DeepSeek API for semantic ranking...")
     else:
         print("DeepSeek API not configured, using keyword-based ranking...")
@@ -132,7 +134,11 @@ def query(
     print(f"Found {len(ranked)} relevant papers")
 
     if json_output:
-        print(json.dumps([item.to_dict() for item in ranked], ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                [item.to_dict() for item in ranked], ensure_ascii=False, indent=2
+            )
+        )
     else:
         _print_ranked_table(ranked)
 
@@ -175,7 +181,9 @@ def remove(
 
     settings = Settings()
     service = IngestionService(settings)
-    options = RemovalOptions(pattern=pattern, source_url=source_url, target_name=target_name)
+    options = RemovalOptions(
+        pattern=pattern, source_url=source_url, target_name=target_name
+    )
 
     try:
         plan = service.plan_removal(options)
@@ -249,10 +257,7 @@ def config(
         summary = service.summary()
         print(f"Configuration file: {summary.config_file}")
         print(f"LLM Provider: {summary.llm_provider}")
-        print(
-            "LLM API Key: "
-            f"{'*' * 20 if summary.llm_api_key else 'Not set'}"
-        )
+        print(f"LLM API Key: {'*' * 20 if summary.llm_api_key else 'Not set'}")
         print(f"LLM API Base: {summary.llm_api_base}")
         print(f"LLM Model: {summary.llm_model}")
         print(f"Data Directory: {summary.data_dir}")
@@ -380,7 +385,13 @@ def list_items(
             print("No papers found.")
             return
         if json_output:
-            print(json.dumps([paper.to_dict() for paper in paper_list], ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    [paper.to_dict() for paper in paper_list],
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
             return
         print(f"Papers (showing {len(paper_list)}):\n")
         for paper in paper_list:
@@ -415,9 +426,9 @@ def list_items(
 @app.command()
 def enrich(
     fields: str = typer.Option(
-        "abstract,keywords,category", 
-        "--fields", 
-        help="Comma-separated list of fields to enrich: abstract,keywords,category"
+        "abstract,keywords,category",
+        "--fields",
+        help="Comma-separated list of fields to enrich: abstract,keywords,category",
     ),
     limit: Optional[int] = typer.Option(
         None, "--limit", help="Limit number of papers to process"
@@ -430,92 +441,98 @@ def enrich(
     ),
 ):
     """Enrich stored papers with specified fields (abstract, keywords, categories)."""
-    
+
     # Parse fields
-    requested_fields = [f.strip() for f in fields.split(',')]
-    valid_fields = {'abstract', 'keywords', 'category'}
+    requested_fields = [f.strip() for f in fields.split(",")]
+    valid_fields = {"abstract", "keywords", "category"}
     invalid_fields = set(requested_fields) - valid_fields
-    
+
     if invalid_fields:
-        print(f"Error: Invalid fields {invalid_fields}. Valid fields are: {valid_fields}")
+        print(
+            f"Error: Invalid fields {invalid_fields}. Valid fields are: {valid_fields}"
+        )
         raise typer.Exit(1)
-    
+
     settings = Settings()
     enrichment_service = PaperEnrichmentService(settings)
-    
+
     # Load papers from storage
     from .storage import PaperStore
+
     store = PaperStore(settings)
     papers = store.list()
-    
+
     if not papers:
         print("No papers stored. Run the fetch command first.")
         raise typer.Exit(1)
-    
+
     # Filter papers that need enrichment for the requested fields
     papers_to_enrich = []
     skipped_count = 0
-    
+
     for paper in papers:
         needs_enrichment = False
-        
+
         # Check each requested field
         for field in requested_fields:
-            if field == 'abstract' and (not paper.abstract or force):
+            if field == "abstract" and (not paper.abstract or force):
                 needs_enrichment = True
                 break
-            elif field == 'keywords' and (not paper.keywords or force):
+            elif field == "keywords" and (not paper.keywords or force):
                 needs_enrichment = True
                 break
-            elif field == 'category' and (not paper.category or force):
+            elif field == "category" and (not paper.category or force):
                 needs_enrichment = True
                 break
-        
+
         if needs_enrichment:
             papers_to_enrich.append(paper)
         else:
             skipped_count += 1
-    
+
     if limit:
         papers_to_enrich = papers_to_enrich[:limit]
-    
+
     if not papers_to_enrich:
         print("No papers need enrichment for the requested fields.")
         if skipped_count > 0:
-            print(f"Skipped {skipped_count} papers (already enriched). Use --force to re-enrich.")
+            print(
+                f"Skipped {skipped_count} papers (already enriched). Use --force to re-enrich."
+            )
         return
-    
+
     print(f"Found {len(papers_to_enrich)} papers that need enrichment")
     if skipped_count > 0:
         print(f"Skipped {skipped_count} papers (already enriched)")
     print(f"Processing fields: {', '.join(requested_fields)}")
     if force:
         print("Force mode: Re-enriching all selected fields")
-    
+
     # Run enrichment
     import asyncio
+
     try:
-        results = asyncio.run(enrichment_service.enrich_papers_batch(
-            papers_to_enrich, 
-            fields=requested_fields, 
-            force=force
-        ))
+        results = asyncio.run(
+            enrichment_service.enrich_papers_batch(
+                papers_to_enrich, fields=requested_fields, force=force
+            )
+        )
     except Exception as e:
         print(f"Enrichment failed: {e}")
         raise typer.Exit(1)
-    
+
     # Update papers in storage
     enriched_count = 0
     failed_count = 0
     skipped_results = 0
     field_stats = {field: 0 for field in requested_fields}
-    
+
     for result in results:
         if result.success:
             if result.error == "Skipped - already enriched":
                 skipped_results += 1
                 continue
-                
+
             paper = result.paper
             if result.abstract:
                 paper.abstract = result.abstract
@@ -523,17 +540,17 @@ def enrich(
                 paper.keywords = result.keywords
             if result.category:
                 paper.category = result.category
-            
+
             store.update(paper)
             enriched_count += 1
-            
+
             # Count enriched fields
             for field in result.enriched_fields:
                 if field in field_stats:
                     field_stats[field] += 1
         else:
             failed_count += 1
-    
+
     # Print results
     if json_output:
         result_data = {
@@ -543,7 +560,7 @@ def enrich(
             "total_processed": len(results),
             "requested_fields": requested_fields,
             "field_stats": field_stats,
-            "force": force
+            "force": force,
         }
         print(json.dumps(result_data, ensure_ascii=False, indent=2))
     else:
@@ -552,7 +569,7 @@ def enrich(
         print(f"Failed: {failed_count} papers")
         print(f"Skipped: {skipped_count + skipped_results} papers")
         print(f"Total processed: {len(results)} papers")
-        
+
         if field_stats:
             print(f"\nField enrichment stats:")
             for field, count in field_stats.items():
@@ -561,11 +578,13 @@ def enrich(
 
 @app.command()
 def derich(
-    paper_id: Optional[str] = typer.Argument(None, help="Paper ID to de-enrich (omit for all papers)"),
+    paper_id: Optional[str] = typer.Argument(
+        None, help="Paper ID to de-enrich (omit for all papers)"
+    ),
     fields: str = typer.Option(
-        "abstract,keywords,category", 
-        "--fields", 
-        help="Comma-separated list of fields to clear: abstract,keywords,category"
+        "abstract,keywords,category",
+        "--fields",
+        help="Comma-separated list of fields to clear: abstract,keywords,category",
     ),
     all_papers: bool = typer.Option(
         False, "--all", help="Clear enrichment data for ALL papers"
@@ -575,28 +594,31 @@ def derich(
     ),
 ):
     """Clear enrichment data for papers."""
-    
+
     # Parse fields
-    requested_fields = [f.strip() for f in fields.split(',')]
-    valid_fields = {'abstract', 'keywords', 'category'}
+    requested_fields = [f.strip() for f in fields.split(",")]
+    valid_fields = {"abstract", "keywords", "category"}
     invalid_fields = set(requested_fields) - valid_fields
-    
+
     if invalid_fields:
-        print(f"Error: Invalid fields {invalid_fields}. Valid fields are: {valid_fields}")
+        print(
+            f"Error: Invalid fields {invalid_fields}. Valid fields are: {valid_fields}"
+        )
         raise typer.Exit(1)
-    
+
     settings = Settings()
     from .storage import PaperStore
+
     store = PaperStore(settings)
     papers = store.list()
-    
+
     if not papers:
         print("No papers stored.")
         raise typer.Exit(1)
-    
+
     # Determine which papers to process
     papers_to_process = []
-    
+
     if all_papers:
         papers_to_process = papers
         print(f"Clearing enrichment data for ALL {len(papers)} papers")
@@ -607,49 +629,49 @@ def derich(
             if p.identifier == paper_id:
                 paper = p
                 break
-        
+
         if not paper:
             print(f"Paper with ID '{paper_id}' not found.")
             raise typer.Exit(1)
-        
+
         papers_to_process = [paper]
         print(f"Clearing enrichment data for paper '{paper_id}'")
     else:
         print("Error: Must specify either a paper ID or use --all flag")
         raise typer.Exit(1)
-    
+
     # Clear the specified fields for all target papers
     cleared_count = 0
     field_stats = {field: 0 for field in requested_fields}
-    
+
     for paper in papers_to_process:
         paper_cleared_fields = []
-        
-        if 'abstract' in requested_fields and paper.abstract:
+
+        if "abstract" in requested_fields and paper.abstract:
             paper.abstract = None
-            paper_cleared_fields.append('abstract')
-            field_stats['abstract'] += 1
-        
-        if 'keywords' in requested_fields and paper.keywords:
+            paper_cleared_fields.append("abstract")
+            field_stats["abstract"] += 1
+
+        if "keywords" in requested_fields and paper.keywords:
             paper.keywords = []
-            paper_cleared_fields.append('keywords')
-            field_stats['keywords'] += 1
-        
-        if 'category' in requested_fields and paper.category:
+            paper_cleared_fields.append("keywords")
+            field_stats["keywords"] += 1
+
+        if "category" in requested_fields and paper.category:
             paper.category = None
-            paper_cleared_fields.append('category')
-            field_stats['category'] += 1
-        
+            paper_cleared_fields.append("category")
+            field_stats["category"] += 1
+
         if paper_cleared_fields:
             store.update(paper)
             cleared_count += 1
-    
+
     if json_output:
         result_data = {
             "papers_processed": len(papers_to_process),
             "papers_cleared": cleared_count,
             "fields_cleared": field_stats,
-            "requested_fields": requested_fields
+            "requested_fields": requested_fields,
         }
         print(json.dumps(result_data, ensure_ascii=False, indent=2))
     else:
@@ -669,27 +691,30 @@ def categories(
     ),
 ):
     """List paper categories with counts."""
-    
+
     settings = Settings()
     from .storage import PaperStore
+
     store = PaperStore(settings)
     papers = store.list()
-    
+
     if not papers:
         print("No papers stored. Run the fetch command first.")
         raise typer.Exit(1)
-    
+
     category_counts = {}
     for paper in papers:
         if paper.category:
             category_counts[paper.category] = category_counts.get(paper.category, 0) + 1
-    
+
     if not category_counts:
         print("No categories found. Run enrich command first.")
         return
-    
-    sorted_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
-    
+
+    sorted_categories = sorted(
+        category_counts.items(), key=lambda x: x[1], reverse=True
+    )
+
     if json_output:
         payload = [
             {"category": category, "count": count}
@@ -697,7 +722,7 @@ def categories(
         ]
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
-    
+
     print(f"Paper Categories (showing {len(sorted_categories)}):\n")
     for category, count in sorted_categories:
         print(f"  {category:<30} {count} papers")
@@ -705,44 +730,42 @@ def categories(
 
 @app.command()
 def keywords(
-    limit: int = typer.Option(
-        20, "--limit", help="Maximum number of keywords to show"
-    ),
+    limit: int = typer.Option(20, "--limit", help="Maximum number of keywords to show"),
     json_output: bool = typer.Option(
         False, "--json", help="Print results in JSON format"
     ),
 ):
     """List most common keywords."""
-    
+
     settings = Settings()
     from .storage import PaperStore
+
     store = PaperStore(settings)
     papers = store.list()
-    
+
     if not papers:
         print("No papers stored. Run the fetch command first.")
         raise typer.Exit(1)
-    
+
     keyword_counts = {}
     for paper in papers:
         for keyword in paper.keywords:
             keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
-    
+
     if not keyword_counts:
         print("No keywords found. Run enrich command first.")
         return
-    
+
     sorted_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)
     sorted_keywords = sorted_keywords[:limit]
-    
+
     if json_output:
         payload = [
-            {"keyword": keyword, "count": count}
-            for keyword, count in sorted_keywords
+            {"keyword": keyword, "count": count} for keyword, count in sorted_keywords
         ]
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
-    
+
     print(f"Top Keywords (showing {len(sorted_keywords)}):\n")
     for keyword, count in sorted_keywords:
         print(f"  {keyword:<30} {count} papers")

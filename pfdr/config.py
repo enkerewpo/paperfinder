@@ -12,7 +12,7 @@ import yaml
 
 # Custom YAML representer to maintain key order
 def represent_ordered_dict(dumper, data):
-    return dumper.represent_mapping('tag:yaml.org,2002:map', data.items())
+    return dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
 
 
 yaml.add_representer(dict, represent_ordered_dict)
@@ -81,7 +81,6 @@ class Settings:
                 self.llm_api_base = llm_config.get("api_base", self.llm_api_base)
                 self.llm_model = llm_config.get("model", self.llm_model)
 
-
             # Load ingestion targets
             if "ingestion_targets" in config:
                 self.ingestion_targets = []
@@ -115,27 +114,57 @@ class Settings:
                 except Exception:
                     # If we can't read the existing config, start fresh
                     existing_config = {}
-            
+
             # Preserve user-configured sections
             llm_config = existing_config.get("llm", {})
             webui_config = existing_config.get("webui", {})
-            
+
             # Use user-configured values if they exist in the file, otherwise use current values
             # This ensures that user's manual edits are preserved
-            llm_provider = llm_config.get("provider") if "provider" in llm_config else self.llm_provider
-            llm_api_key = llm_config.get("api_key") if "api_key" in llm_config and llm_config.get("api_key") is not None else self.llm_api_key
-            llm_api_base = llm_config.get("api_base") if "api_base" in llm_config and llm_config.get("api_base") is not None else self.llm_api_base
-            llm_model = llm_config.get("model") if "model" in llm_config and llm_config.get("model") is not None else self.llm_model
-                
-            webui_host = webui_config.get("host") if "host" in webui_config else self.webui_host
-            webui_port = webui_config.get("port") if "port" in webui_config else self.webui_port
-            webui_reload = webui_config.get("reload") if "reload" in webui_config else self.webui_reload
-            
+            llm_provider = (
+                llm_config.get("provider")
+                if "provider" in llm_config
+                else self.llm_provider
+            )
+            llm_api_key = (
+                llm_config.get("api_key")
+                if "api_key" in llm_config and llm_config.get("api_key") is not None
+                else self.llm_api_key
+            )
+            llm_api_base = (
+                llm_config.get("api_base")
+                if "api_base" in llm_config and llm_config.get("api_base") is not None
+                else self.llm_api_base
+            )
+            llm_model = (
+                llm_config.get("model")
+                if "model" in llm_config and llm_config.get("model") is not None
+                else self.llm_model
+            )
+
+            webui_host = (
+                webui_config.get("host") if "host" in webui_config else self.webui_host
+            )
+            webui_port = (
+                webui_config.get("port") if "port" in webui_config else self.webui_port
+            )
+            webui_reload = (
+                webui_config.get("reload")
+                if "reload" in webui_config
+                else self.webui_reload
+            )
+
             with open(self.config_file, "w", encoding="utf-8") as f:
                 # Write header comment
                 f.write("# pfdr Configuration File\n")
-                f.write("# Synced at " + __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
-                
+                f.write(
+                    "# Synced at "
+                    + __import__("datetime")
+                    .datetime.now()
+                    .strftime("%Y-%m-%d %H:%M:%S")
+                    + "\n\n"
+                )
+
                 # LLM Configuration section
                 f.write("# ============================================\n")
                 f.write("# LLM Configuration\n")
@@ -144,10 +173,12 @@ class Settings:
                 f.write("# Supported providers: deepseek, openai\n")
                 f.write("llm:\n")
                 f.write(f"  provider: {llm_provider}  # LLM provider to use\n")
-                f.write(f"  api_key: {llm_api_key or 'null'}  # API key (set via environment variable PFDR_LLM_API_KEY)\n")
+                f.write(
+                    f"  api_key: {llm_api_key or 'null'}  # API key (set via environment variable PFDR_LLM_API_KEY)\n"
+                )
                 f.write(f"  api_base: {llm_api_base or 'null'}  # API base URL\n")
                 f.write(f"  model: {llm_model or 'null'}  # Model name to use\n\n")
-                
+
                 # Web UI Configuration section
                 f.write("# ============================================\n")
                 f.write("# Web UI Configuration\n")
@@ -156,8 +187,10 @@ class Settings:
                 f.write("webui:\n")
                 f.write(f"  host: {webui_host}  # Host to bind the web server to\n")
                 f.write(f"  port: {webui_port}  # Port to run the web server on\n")
-                f.write(f"  reload: {str(webui_reload).lower()}  # Enable auto-reload for development\n\n")
-                
+                f.write(
+                    f"  reload: {str(webui_reload).lower()}  # Enable auto-reload for development\n\n"
+                )
+
                 # Ingestion Targets section (this is what gets synced)
                 f.write("# ============================================\n")
                 f.write("# Ingestion Targets\n")
@@ -166,12 +199,12 @@ class Settings:
                 f.write("# Each target represents a conference or venue\n")
                 f.write("# Set 'enabled: false' to temporarily disable a target\n")
                 f.write("ingestion_targets:\n")
-                
+
                 for target in self.ingestion_targets:
                     f.write(f"- name: {target.name}\n")
                     f.write(f"  url: {target.url}\n")
                     f.write(f"  enabled: {str(target.enabled).lower()}\n")
-                
+
         except Exception as e:
             raise RuntimeError(f"Failed to save config to {self.config_file}: {e}")
 
@@ -252,8 +285,14 @@ class Settings:
             with open(self.config_file, "w", encoding="utf-8") as f:
                 # Write header comment
                 f.write("# pfdr Configuration File\n")
-                f.write("# Initialized at " + __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
-                
+                f.write(
+                    "# Initialized at "
+                    + __import__("datetime")
+                    .datetime.now()
+                    .strftime("%Y-%m-%d %H:%M:%S")
+                    + "\n\n"
+                )
+
                 # LLM Configuration section
                 f.write("# ============================================\n")
                 f.write("# LLM Configuration\n")
@@ -262,10 +301,12 @@ class Settings:
                 f.write("# Supported providers: deepseek, openai\n")
                 f.write("llm:\n")
                 f.write("  provider: deepseek  # LLM provider to use\n")
-                f.write("  api_key: null  # API key (set via environment variable PFDR_LLM_API_KEY)\n")
+                f.write(
+                    "  api_key: null  # API key (set via environment variable PFDR_LLM_API_KEY)\n"
+                )
                 f.write("  api_base: https://api.deepseek.com  # API base URL\n")
                 f.write("  model: deepseek-chat  # Model name to use\n\n")
-                
+
                 # Web UI Configuration section
                 f.write("# ============================================\n")
                 f.write("# Web UI Configuration\n")
@@ -275,7 +316,7 @@ class Settings:
                 f.write("  host: 127.0.0.1  # Host to bind the web server to\n")
                 f.write("  port: 8000  # Port to run the web server on\n")
                 f.write("  reload: false  # Enable auto-reload for development\n\n")
-                
+
                 # Ingestion Targets section
                 f.write("# ============================================\n")
                 f.write("# Ingestion Targets\n")
@@ -284,18 +325,24 @@ class Settings:
                 f.write("# Each target represents a conference or venue\n")
                 f.write("# Set 'enabled: false' to temporarily disable a target\n")
                 f.write("ingestion_targets:\n")
-                
+
                 # Default targets
                 default_targets = [
-                    ("neurips-2023", "https://dblp.org/search/publ/api?q=stream:conf/nips:2023"),
-                    ("icml-2023", "https://dblp.org/search/publ/api?q=stream:conf/icml:2023"),
+                    (
+                        "neurips-2023",
+                        "https://dblp.org/search/publ/api?q=stream:conf/nips:2023",
+                    ),
+                    (
+                        "icml-2023",
+                        "https://dblp.org/search/publ/api?q=stream:conf/icml:2023",
+                    ),
                 ]
-                
+
                 for name, url in default_targets:
                     f.write(f"- name: {name}\n")
                     f.write(f"  url: {url}\n")
                     f.write(f"  enabled: true\n")
-                
+
         except Exception as e:
             raise RuntimeError(
                 f"Failed to create default config at {self.config_file}: {e}"
