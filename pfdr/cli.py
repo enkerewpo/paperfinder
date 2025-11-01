@@ -47,7 +47,7 @@ def fetch(
         None, "--target", help="Name of a configured ingestion target from config.yaml"
     ),
     all_targets: bool = typer.Option(
-        False, "--all-targets", help="Fetch from all enabled targets in config.yaml"
+        False, "--all-targets", help="Fetch from all targets in config.yaml"
     ),
     page_size: int = typer.Option(
         200, "--page-size", help="Number of papers to fetch per API request batch"
@@ -85,7 +85,7 @@ def fetch(
     if options.target_name:
         print(f"Using configured target: {options.target_name}")
     elif options.all_targets:
-        print(f"Using {len(sources)} enabled targets from configuration.")
+        print(f"Using {len(sources)} targets from configuration.")
     elif options.sources_file:
         print(f"Loaded {len(sources)} sources from file '{options.sources_file}'.")
 
@@ -281,10 +281,8 @@ def config(
             return
         print("Configured Ingestion Targets:\n")
         for target in targets:
-            status = "enabled" if target.enabled else "disabled"
             print(f"  {target.name}")
-            print(f"    URL: {target.url}")
-            print(f"    Status: {status}\n")
+            print(f"    URL: {target.url}\n")
         return
 
     print("Use --help to see available config options.")

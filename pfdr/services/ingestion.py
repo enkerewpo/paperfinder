@@ -148,11 +148,10 @@ class IngestionService:
             existing = self._find_target_by_url(state.source_url)
             if existing is None:
                 self.settings.ingestion_targets.append(
-                    IngestionTarget(name=name, url=state.source_url, enabled=True)
+                    IngestionTarget(name=name, url=state.source_url)
                 )
                 synced_targets.append(f"Added: {name}")
             else:
-                existing.enabled = True
                 synced_targets.append(f"Updated: {name}")
 
         if synced_targets:
@@ -187,14 +186,10 @@ class IngestionService:
                 raise SourceSelectionError(
                     f"Target '{options.target_name}' not found in configuration"
                 )
-            if not target.enabled:
-                raise SourceSelectionError(
-                    f"Target '{options.target_name}' is disabled"
-                )
             return [target.url]
         enabled_targets = self.settings.get_enabled_targets()
         if not enabled_targets:
-            raise SourceSelectionError("No enabled targets found in configuration")
+            raise SourceSelectionError("No targets found in configuration")
         return [target.url for target in enabled_targets]
 
     def _resolve_task(self, options: FetchOptions, sources: Iterable[str]) -> TaskMeta:

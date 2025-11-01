@@ -126,7 +126,7 @@ class WebUI:
                 "llm_model": self.settings.llm_model,
                 "data_dir": str(self.settings.data_dir),
                 "targets": [
-                    {"name": target.name, "url": target.url, "enabled": target.enabled}
+                    {"name": target.name, "url": target.url}
                     for target in self.settings.ingestion_targets
                 ],
             }
@@ -176,14 +176,12 @@ class WebUI:
 
                 if not target:
                     raise HTTPException(404, f"Target '{target_name}' not found")
-                if not target.enabled:
-                    raise HTTPException(400, f"Target '{target_name}' is disabled")
 
                 sources = [target.url]
             elif all_targets:
                 enabled_targets = self.settings.get_enabled_targets()
                 if not enabled_targets:
-                    raise HTTPException(400, "No enabled targets found")
+                    raise HTTPException(400, "No targets found")
                 sources = [target.url for target in enabled_targets]
 
             if not sources:

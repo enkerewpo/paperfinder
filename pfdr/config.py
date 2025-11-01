@@ -24,7 +24,6 @@ class IngestionTarget:
 
     name: str
     url: str
-    enabled: bool = True
 
 
 @dataclass(slots=True)
@@ -88,7 +87,6 @@ class Settings:
                     target = IngestionTarget(
                         name=target_data["name"],
                         url=target_data["url"],
-                        enabled=target_data.get("enabled", True),
                     )
                     self.ingestion_targets.append(target)
 
@@ -101,6 +99,21 @@ class Settings:
 
         except Exception as e:
             print(f"Warning: Failed to load config from {self.config_file}: {e}")
+
+    def _sort_targets(self, targets: List[IngestionTarget]) -> List[IngestionTarget]:
+        """Sort targets by conference name (alphabetically) and year (descending)."""
+
+        def sort_key(target: IngestionTarget) -> tuple[str, int]:
+            # Extract conference name and year from target name (format: "conference-year")
+            parts = target.name.rsplit("-", 1)
+            if len(parts) == 2 and parts[1].isdigit():
+                conf_name = parts[0]
+                year = int(parts[1])
+                return (conf_name, -year)  # Negative year for descending order
+            # Fallback for targets that don't match the format
+            return (target.name, 0)
+
+        return sorted(targets, key=sort_key)
 
     def save_to_yaml(self) -> None:
         """Save current configuration to YAML file, preserving user-configured sections."""
@@ -154,6 +167,9 @@ class Settings:
                 else self.webui_reload
             )
 
+            # Sort targets before saving
+            sorted_targets = self._sort_targets(self.ingestion_targets)
+
             with open(self.config_file, "w", encoding="utf-8") as f:
                 # Write header comment
                 f.write("# pfdr Configuration File\n")
@@ -197,13 +213,11 @@ class Settings:
                 f.write("# ============================================\n")
                 f.write("# Configure DBLP API endpoints to fetch papers from\n")
                 f.write("# Each target represents a conference or venue\n")
-                f.write("# Set 'enabled: false' to temporarily disable a target\n")
                 f.write("ingestion_targets:\n")
 
-                for target in self.ingestion_targets:
+                for target in sorted_targets:
                     f.write(f"- name: {target.name}\n")
                     f.write(f"  url: {target.url}\n")
-                    f.write(f"  enabled: {str(target.enabled).lower()}\n")
 
         except Exception as e:
             raise RuntimeError(f"Failed to save config to {self.config_file}: {e}")
@@ -214,7 +228,6 @@ class Settings:
         for target in self.ingestion_targets:
             if target.name == name:
                 target.url = url
-                target.enabled = True
                 return
 
         # Add new target
@@ -230,8 +243,8 @@ class Settings:
         return False
 
     def get_enabled_targets(self) -> List[IngestionTarget]:
-        """Get list of enabled ingestion targets."""
-        return [target for target in self.ingestion_targets if target.enabled]
+        """Get list of all ingestion targets."""
+        return list(self.ingestion_targets)
 
     def ensure_data_dir(self) -> None:
         """Create the data directory if it does not exist."""
@@ -323,7 +336,6 @@ class Settings:
                 f.write("# ============================================\n")
                 f.write("# Configure DBLP API endpoints to fetch papers from\n")
                 f.write("# Each target represents a conference or venue\n")
-                f.write("# Set 'enabled: false' to temporarily disable a target\n")
                 f.write("ingestion_targets:\n")
 
                 # Default targets
@@ -341,7 +353,6 @@ class Settings:
                 for name, url in default_targets:
                     f.write(f"- name: {name}\n")
                     f.write(f"  url: {url}\n")
-                    f.write(f"  enabled: true\n")
 
         except Exception as e:
             raise RuntimeError(
