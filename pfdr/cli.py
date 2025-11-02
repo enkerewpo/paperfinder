@@ -437,6 +437,9 @@ def enrich(
     json_output: bool = typer.Option(
         False, "--json", help="Print results in JSON format"
     ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed log output"
+    ),
 ):
     """Enrich stored papers with specified fields (abstract, keywords, categories)."""
 
@@ -464,29 +467,20 @@ def enrich(
         print("No papers stored. Run the fetch command first.")
         raise typer.Exit(1)
 
-    # Filter papers that need enrichment for the requested fields
+    # Filter papers: skip only if paper has both keywords AND category (complete enrichment)
+    # Otherwise, let enrich_papers_batch handle the full enrichment flow
     papers_to_enrich = []
     skipped_count = 0
 
     for paper in papers:
-        needs_enrichment = False
-
-        # Check each requested field
-        for field in requested_fields:
-            if field == "abstract" and (not paper.abstract or force):
-                needs_enrichment = True
-                break
-            elif field == "keywords" and (not paper.keywords or force):
-                needs_enrichment = True
-                break
-            elif field == "category" and (not paper.category or force):
-                needs_enrichment = True
-                break
-
-        if needs_enrichment:
-            papers_to_enrich.append(paper)
-        else:
+        # Check if paper has completed full enrichment (has keywords AND category)
+        has_keywords = paper.keywords and len(paper.keywords) > 0
+        has_category = paper.category is not None and paper.category.strip() != ""
+        
+        if has_keywords and has_category and not force:
             skipped_count += 1
+        else:
+            papers_to_enrich.append(paper)
 
     if limit:
         papers_to_enrich = papers_to_enrich[:limit]
@@ -508,15 +502,24 @@ def enrich(
 
     # Run enrichment
     import asyncio
+    from .logger import setup_logging
+    
+    # Setup logging - verbose shows more detail, otherwise minimal
+    log_level = "DEBUG" if verbose else "INFO"
+    log_format = "cli" if verbose else "minimal"
+    setup_logging(level=log_level, format_type=log_format, colorize=True)
 
     try:
+        # Always try to enrich all requested fields for selected papers
+        # Even if they already have some fields, we should enrich missing ones
         results = asyncio.run(
             enrichment_service.enrich_papers_batch(
                 papers_to_enrich, fields=requested_fields, force=force
             )
         )
     except Exception as e:
-        print(f"Enrichment failed: {e}")
+        from loguru import logger
+        logger.exception("Enrichment failed")
         raise typer.Exit(1)
 
     # Update papers in storage
@@ -531,21 +534,23 @@ def enrich(
                 skipped_results += 1
                 continue
 
-            paper = result.paper
-            if result.abstract:
-                paper.abstract = result.abstract
-            if result.keywords:
-                paper.keywords = result.keywords
-            if result.category:
-                paper.category = result.category
+            # Only update paper if we actually enriched at least one field
+            if result.enriched_fields:
+                paper = result.paper
+                if result.abstract:
+                    paper.abstract = result.abstract
+                if result.keywords:
+                    paper.keywords = result.keywords
+                if result.category:
+                    paper.category = result.category
 
-            store.update(paper)
-            enriched_count += 1
+                store.update(paper)
+                enriched_count += 1
 
-            # Count enriched fields
-            for field in result.enriched_fields:
-                if field in field_stats:
-                    field_stats[field] += 1
+                # Count enriched fields
+                for field in result.enriched_fields:
+                    if field in field_stats:
+                        field_stats[field] += 1
         else:
             failed_count += 1
 
@@ -795,6 +800,13 @@ def _print_ranked_table(ranked) -> None:
 
 
 def main(argv: list[str] | None = None):
+    """Main entry point for pfdr CLI."""
+    from .logger import setup_logging
+    from loguru import logger
+    
+    # Setup default logging for CLI
+    setup_logging(level="INFO", format_type="cli", colorize=True)
+    
     if argv is None:
         argv = sys.argv[1:]
 
@@ -805,7 +817,7 @@ def main(argv: list[str] | None = None):
     try:
         app(argv)
     except Exception as exc:  # pylint: disable=broad-except
-        print(f"An unexpected error occurred: {exc}")
+        logger.exception(f"An unexpected error occurred: {exc}")
         raise typer.Exit(1) from exc
 
 

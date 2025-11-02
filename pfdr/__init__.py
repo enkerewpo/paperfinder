@@ -7,3 +7,17 @@ from .models import Paper, TaskMeta, TaskStatus
 from .state import IngestionStateStore, SourceIngestionState
 from .storage import PaperStore, TaskStore
 from .tasks import TaskManager
+
+# Export logger for use in other modules
+from loguru import logger as _logger
+__all__ = [
+    "Settings",
+    "Paper",
+    "TaskMeta",
+    "TaskStatus",
+    "IngestionStateStore",
+    "SourceIngestionState",
+    "PaperStore",
+    "TaskStore",
+    "TaskManager",
+]

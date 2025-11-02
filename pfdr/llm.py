@@ -117,10 +117,18 @@ class AdaptiveLLMClient:
     ) -> str:
         """Chat completion method for enrichment services."""
         if self.backend and hasattr(self.backend, "chat_completion"):
-            return await self.backend.chat_completion(messages, temperature=temperature)
+            result = await self.backend.chat_completion(messages, temperature=temperature)
+            # Check if backend returned an error message instead of actual content
+            error_messages = [
+                "LLM not configured or available",
+                "DeepSeek API not configured",
+                "OpenAI API not configured"
+            ]
+            if result in error_messages:
+                raise RuntimeError(f"LLM not properly configured: {result}")
+            return result
         else:
-            # Fallback: return a simple response
-            return "LLM not configured or available"
+            raise RuntimeError("LLM backend not available or not configured")
 
 
 def create_llm_client(settings: Settings, *, timeout: int = 60) -> AdaptiveLLMClient:

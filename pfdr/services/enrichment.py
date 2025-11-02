@@ -5,19 +5,17 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import aiohttp
 from dataclasses import dataclass
+from loguru import logger
 
 from ..config import Settings
 from ..llm import create_llm_client
 from ..models import Paper
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,46 +59,32 @@ class AbstractEnrichmentService:
 
     async def enrich_abstract(self, paper: Paper) -> Optional[str]:
         """Try to get abstract from various sources."""
-        logger.info(f"Enriching abstract for paper: {paper.identifier}")
-
         if paper.abstract:
-            logger.info(f"Paper {paper.identifier} already has abstract")
             return paper.abstract
 
         # Try different sources based on available identifiers
         if paper.doi:
-            logger.info(f"Trying DOI for paper {paper.identifier}: {paper.doi}")
             abstract = await self._get_abstract_from_doi(paper.doi)
             if abstract:
-                logger.info(f"Found abstract via DOI for {paper.identifier}")
                 return abstract
 
         # Try Semantic Scholar API
         if paper.doi or paper.title:
-            logger.info(f"Trying Semantic Scholar for paper {paper.identifier}")
             abstract = await self._get_abstract_from_semantic_scholar(paper)
             if abstract:
-                logger.info(
-                    f"Found abstract via Semantic Scholar for {paper.identifier}"
-                )
                 return abstract
 
         if paper.url:
-            logger.info(f"Trying URL for paper {paper.identifier}: {paper.url}")
             abstract = await self._get_abstract_from_url(paper.url)
             if abstract:
-                logger.info(f"Found abstract via URL for {paper.identifier}")
                 return abstract
 
         # Try arXiv if it's an arXiv paper
         if "arxiv" in paper.identifier.lower():
-            logger.info(f"Trying arXiv for paper {paper.identifier}")
             abstract = await self._get_arxiv_abstract(paper.identifier)
             if abstract:
-                logger.info(f"Found abstract via arXiv for {paper.identifier}")
                 return abstract
 
-        logger.warning(f"No abstract found for paper {paper.identifier}")
         return None
 
     async def _get_abstract_from_doi(self, doi: str) -> Optional[str]:
@@ -271,6 +255,7 @@ class KeywordExtractionService:
     async def extract_keywords(self, paper: Paper) -> List[str]:
         """Extract keywords from paper title and abstract."""
         if not paper.title:
+            logger.warning(f"Cannot extract keywords: paper {paper.identifier} has no title")
             return []
 
         # Prepare content for keyword extraction
@@ -290,21 +275,32 @@ Paper content:
 Return only technical keywords separated by commas, no explanations."""
 
         try:
+            logger.debug(f"Calling LLM to extract keywords for paper {paper.identifier}")
             response = await self.llm_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}], temperature=0.3
             )
+            
+            if not response or not response.strip():
+                logger.warning(f"LLM returned empty response for keywords extraction (paper {paper.identifier})")
+                return []
 
             keywords_text = response.strip()
             keywords = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
 
             # Simple cleaning - trust the LLM to do the filtering
             cleaned_keywords = [kw.strip().lower() for kw in keywords if kw.strip()]
-            return cleaned_keywords[:5]  # Limit to 5 keywords
+            result = cleaned_keywords[:5]  # Limit to 5 keywords
+            logger.debug(f"Extracted {len(result)} keywords for paper {paper.identifier}: {result}")
+            return result
 
-        except Exception as e:
+        except RuntimeError as e:
+            # LLM not configured or other runtime errors
             logger.error(
-                f"Failed to extract keywords for paper {paper.identifier}: {e}"
+                f"LLM configuration error for keywords extraction (paper {paper.identifier}): {e}"
             )
+            raise  # Re-raise to let caller know LLM is not available
+        except Exception as e:
+            logger.exception(f"Failed to extract keywords for paper {paper.identifier}: {e}")
             return []
 
 
@@ -452,14 +448,18 @@ Return only the category name (not the number), no explanations."""
             )
 
             assigned_category = response.strip().lower()
+            logger.debug(f"LLM assigned category for paper {paper.identifier}: '{assigned_category}' (raw response: '{response.strip()}')")
 
             # Validate the response is one of our categories
             for cat in categories:
                 if assigned_category == cat.lower() or assigned_category in cat.lower():
+                    logger.debug(f"Matched category '{assigned_category}' to '{cat}' for paper {paper.identifier}")
                     return cat
 
             # If no match, return the first category as fallback
-            return categories[0] if categories else "other"
+            fallback = categories[0] if categories else "other"
+            logger.warning(f"No category match found for paper {paper.identifier}, using fallback: '{fallback}' (LLM response: '{assigned_category}')")
+            return fallback
 
         except Exception as e:
             logger.error(f"Failed to assign category for paper {paper.identifier}: {e}")
@@ -512,26 +512,51 @@ class PaperEnrichmentService:
 
         results = []
 
-        # Filter papers that actually need enrichment for the specified fields
+        # Filter papers: skip only if paper has both keywords AND category (complete enrichment)
+        # Otherwise, always execute full enrichment flow: abstract -> keywords -> category
         papers_to_enrich = []
         for paper in papers:
-            needs_enrichment = False
+            # Check if paper has completed full enrichment (has keywords AND category)
+            has_keywords = paper.keywords and len(paper.keywords) > 0
+            has_category = paper.category is not None and paper.category.strip() != ""
+            
+            if has_keywords and has_category and not force:
+                # Paper has completed enrichment, skip it
+                logger.debug(f"Paper {paper.identifier} skipped (has keywords and category, force={force})")
+                results.append(
+                    EnrichmentResult(
+                        paper=paper,
+                        abstract=paper.abstract,
+                        keywords=paper.keywords,
+                        category=paper.category,
+                        success=True,
+                        error="Skipped - already fully enriched",
+                        enriched_fields=[],
+                    )
+                )
+                continue
+            
+            # Paper needs enrichment - always execute full flow for requested fields
             paper_needs_fields = []
-
-            # Check each field individually
-            if "abstract" in fields and (not paper.abstract or force):
-                needs_enrichment = True
-                paper_needs_fields.append("abstract")
-
-            if "keywords" in fields and (not paper.keywords or force):
-                needs_enrichment = True
-                paper_needs_fields.append("keywords")
-
-            if "category" in fields and (not paper.category or force):
-                needs_enrichment = True
-                paper_needs_fields.append("category")
-
-            if needs_enrichment:
+            
+            # Step 1: Always try to enrich abstract (if requested)
+            if "abstract" in fields:
+                if not paper.abstract or force:
+                    paper_needs_fields.append("abstract")
+            
+            # Step 2: Always enrich keywords (if requested) unless paper has keywords AND category
+            # Will use abstract if available, otherwise use title only
+            if "keywords" in fields:
+                if not has_keywords or force:
+                    paper_needs_fields.append("keywords")
+            
+            # Step 3: Always enrich category (if requested) unless paper has keywords AND category
+            # Will use abstract if available, otherwise use title only
+            if "category" in fields:
+                if not has_category or force:
+                    paper_needs_fields.append("category")
+            
+            if paper_needs_fields:
                 papers_to_enrich.append((paper, paper_needs_fields))
             else:
                 # Create a result indicating the paper was skipped
@@ -554,6 +579,7 @@ class PaperEnrichmentService:
         async with self.abstract_service as service:
             tasks = []
             for paper, paper_fields in papers_to_enrich:
+                logger.debug(f"Task for {paper.identifier}: {paper_fields}")
                 task = self._enrich_single_paper(paper, service, paper_fields, force)
                 tasks.append(task)
 
@@ -563,6 +589,7 @@ class PaperEnrichmentService:
             for i, result in enumerate(enrichment_results):
                 if isinstance(result, Exception):
                     paper, _ = papers_to_enrich[i]
+                    logger.exception(f"Enrichment task failed for paper {paper.identifier}: {result}")
                     results.append(
                         EnrichmentResult(
                             paper=paper,
@@ -575,23 +602,47 @@ class PaperEnrichmentService:
                     results.append(result)
 
         # Now assign categories in batch for papers that need it
+        # Build mapping of paper identifiers to results that need categories
         papers_needing_categories = [
             paper for paper, fields in papers_to_enrich if "category" in fields
         ]
+        papers_needing_category_ids = {paper.identifier for paper in papers_needing_categories}
 
         if papers_needing_categories:
+            logger.debug(f"{len(papers_needing_categories)} papers need categories")
             # Get existing categories from all papers for reference
             existing_categories = await self._get_existing_categories()
-            category_assignments = await self.clustering_service.cluster_papers(
-                papers_needing_categories, existing_categories
-            )
+            # Create papers with enriched abstracts for category assignment
+            papers_for_category = []
             for result in results:
-                if result.success and result.paper in papers_needing_categories:
-                    result.category = category_assignments.get(
-                        result.paper.identifier, "other"
+                if result.success and result.paper.identifier in papers_needing_category_ids:
+                    # Use enriched abstract if available
+                    paper_for_category = Paper(
+                        identifier=result.paper.identifier,
+                        title=result.paper.title,
+                        authors=result.paper.authors,
+                        venue=result.paper.venue,
+                        year=result.paper.year,
+                        url=result.paper.url,
+                        doi=result.paper.doi,
+                        source=result.paper.source,
+                        abstract=result.abstract or result.paper.abstract,  # Use enriched abstract
                     )
-                    if "category" in result.enriched_fields:
-                        result.enriched_fields.append("category")
+                    papers_for_category.append(paper_for_category)
+            
+            if papers_for_category:
+                category_assignments = await self.clustering_service.cluster_papers(
+                    papers_for_category, existing_categories
+                )
+                for result in results:
+                    if result.success and result.paper.identifier in papers_needing_category_ids:
+                        assigned_category = category_assignments.get(
+                            result.paper.identifier, "other"
+                        )
+                        result.category = assigned_category
+                        if result.category:
+                            result.enriched_fields.append("category")
+                            logger.success(f"{result.paper.identifier}  category({result.category})")
 
         return results
 
@@ -624,25 +675,42 @@ class PaperEnrichmentService:
     ) -> EnrichmentResult:
         """Enrich a single paper (used in batch processing)."""
         result = EnrichmentResult(paper=paper)
+        enriched_items = []
 
         try:
-            # Only enrich the fields that are requested and needed
+            # Step 1: Enrich abstract
             if "abstract" in fields and (not paper.abstract or force):
                 enriched_abstract = await abstract_service.enrich_abstract(paper)
                 if enriched_abstract:
                     result.abstract = enriched_abstract
                     result.enriched_fields.append("abstract")
+                    enriched_items.append("abstract")
                 else:
                     result.abstract = paper.abstract
             else:
                 result.abstract = paper.abstract
 
-            if "keywords" in fields and (not paper.keywords or force):
-                enriched_keywords = await self.keyword_service.extract_keywords(paper)
-                if enriched_keywords:
-                    result.keywords = enriched_keywords
-                    result.enriched_fields.append("keywords")
-                else:
+            # Step 2: Enrich keywords (use enriched abstract if available)
+            if "keywords" in fields:
+                original_abstract = paper.abstract
+                paper.abstract = result.abstract or paper.abstract
+                try:
+                    enriched_keywords = await self.keyword_service.extract_keywords(paper)
+                    paper.abstract = original_abstract
+                    if enriched_keywords and len(enriched_keywords) > 0:
+                        result.keywords = enriched_keywords
+                        result.enriched_fields.append("keywords")
+                        enriched_items.append(f"keywords({len(enriched_keywords)})")
+                        logger.debug(f"Keywords for {paper.identifier}: {enriched_keywords}")
+                    else:
+                        result.keywords = paper.keywords
+                except RuntimeError as e:
+                    logger.error(f"LLM configuration error for keywords extraction (paper {paper.identifier}): {e}")
+                    paper.abstract = original_abstract
+                    raise
+                except Exception as e:
+                    logger.exception(f"Failed to extract keywords for paper {paper.identifier}: {e}")
+                    paper.abstract = original_abstract
                     result.keywords = paper.keywords
             else:
                 result.keywords = paper.keywords
@@ -651,6 +719,10 @@ class PaperEnrichmentService:
             result.category = paper.category
 
             result.success = True
+            
+            # Log summary for this paper (only if something was enriched)
+            if enriched_items:
+                logger.success(f"{paper.identifier}  {' '.join(enriched_items)}")
 
         except Exception as e:
             result.success = False
